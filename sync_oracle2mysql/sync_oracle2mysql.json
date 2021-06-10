@@ -1,0 +1,23 @@
+{
+  "oracle_server": {
+     "host": "192.168.20.128",
+     "port": "1521",
+     "instance":"orcl",
+     "user": "scott",
+     "password":"tiger"
+  },
+  "mysql_server": {
+     "host": "10.2.39.17",
+     "port": "23306",
+     "user": "puppet",
+     "password":"Puppet@123",
+     "database":"test",
+     "charset":"utf8"
+  },
+  "sync_tables":[
+        "emp::",
+        "dept::"
+  ],
+ "sync_time_type":"day",
+ "batch_size":"100"
+}

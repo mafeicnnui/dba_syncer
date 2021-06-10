@@ -1,0 +1,9 @@
+{
+  "host":"10.2.39.17",
+  "port":"5672",
+  "user":"admin",
+  "password":"abcd@1234",
+  "mysql_db":"10.2.39.18:3306:puppet:puppet:Puppet@123",
+  "sync_table":"t_func",
+  "queue_name":"t_func"
+}
