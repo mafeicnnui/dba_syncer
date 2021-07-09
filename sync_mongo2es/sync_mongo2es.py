@@ -122,9 +122,6 @@ def preprocessor(result):
     for key in result:
         if is_valid_datetime(result[key]):
             result[key] = (result[key] + datetime.timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            result[key]=str(result[key])
-    #print('preprocessor=',result)
     return result
 
 '''
@@ -138,7 +135,7 @@ def is_valid_datetime(strdate):
 
 def get_config(fname):
     config = {}
-    cfg=configparser.ConfigParser()
+    cfg = configparser.ConfigParser()
     cfg.read(fname,encoding="utf-8-sig")
     config['sync_table']               = cfg.get("sync", "sync_table")
     config['batch_size']               = cfg.get("sync", "batch_size")
@@ -148,6 +145,8 @@ def get_config(fname):
     config['db_es']                    = get_ds_es(cfg.get("sync", "db_es"))
     config['db_mongo_str']             = get_ds_mongo_str(cfg.get("sync", "db_mongo"))
     config['db_es_str']                = get_ds_es_str(cfg.get("sync", "db_es"))
+    config['index_name']               = cfg.get("sync", "index_name")
+    config['sync_time_data_type']      = cfg.get("sync", "sync_time_data_type")
     return config
 
 def get_seconds(b):
@@ -183,7 +182,6 @@ def print_dict(config):
            print(' '.ljust(3,' ')+key.ljust(20,' ')+'=',config[key])
     print('-'.ljust(125,'-'))
 
-
 def format_sql(v_sql):
     return v_sql.replace("\\","\\\\").replace("'","\\'")
 
@@ -202,6 +200,9 @@ def check_mongo_tab_exists(db,tab):
     except:
       return False
 
+def getUnixTime():
+    return int(time.mktime(datetime.datetime.now().timetuple()))
+
 def get_mongo_incr_where(config,tab):
     v_rq  = ''
     v_day = tab.split(':')[2]
@@ -211,18 +212,32 @@ def get_mongo_incr_where(config,tab):
     v_col=tab.split(':')[1]
 
     if config['sync_time_type']=='day':
-       v_rq = (datetime.datetime.now() + datetime.timedelta(days=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+        if config['sync_time_data_type']=='unixTime':
+           v_rq = getUnixTime()-n_day*24*3600
+        else:
+           v_rq = (datetime.datetime.now() + datetime.timedelta(days=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+           v_rq = parser.parse(v_rq)
+
     elif config['sync_time_type']=='hour':
-       v_rq = (datetime.datetime.now() + datetime.timedelta(hours=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+        if config['sync_time_data_type'] == 'unixTime':
+            v_rq = getUnixTime() - n_day * 3600
+        else:
+            v_rq = (datetime.datetime.now() + datetime.timedelta(hours=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+            v_rq = parser.parse(v_rq)
     elif config['sync_time_type']=='min':
-       v_rq = (datetime.datetime.now() + datetime.timedelta(minutes=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+        if config['sync_time_data_type'] == 'unixTime':
+            v_rq = getUnixTime() - n_day * 60
+        else:
+            v_rq = (datetime.datetime.now() + datetime.timedelta(minutes=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+            v_rq = parser.parse(v_rq)
     else:
        v_rq =''
 
     if v_rq =='':
        return {}
-    v_rq = parser.parse(v_rq)
+
     v_json = {v_col: {"$gte": v_rq}}
+    print('get_mongo_incr_where=',v_json)
     return v_json
 
 
@@ -252,7 +267,6 @@ class DateEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
-
 def full_sync(config):
     #process
     db_mongodb           = config['db_mongo']
@@ -273,7 +287,7 @@ def full_sync(config):
                id=str(r['_id'])
                del r['_id']
                mylist.append({
-                   "_index" : config['db_mongo_db'].lower(),
+                   "_index" : config['index_name'].lower(),
                    "_type"  : tab,
                    "_id"    : id,
                    "_source": r
@@ -317,11 +331,11 @@ def start_sync(config):
             i_counter = 0
             mylist    = []
             for r in results:
-                r=preprocessor(r)
+                r = preprocessor(r)
                 id = str(r['_id'])
                 del r['_id']
                 mylist.append({
-                    "_index": config['db_mongo_db'].lower() ,
+                    "_index": config['index_name'].lower(),
                     "_type": tab,
                     "_id": id,
                     "_source": r
@@ -389,13 +403,10 @@ def init_es(config):
 
     print('mappings=',json.dumps(d_mappings, cls=DateEncoder, ensure_ascii=False, indent=4, separators=(',', ':')) + '\n')
     try:
-      es.indices.create(index=db_name,body =d_mappings)
+      es.indices.create(index=config['index_name'].lower(),body =d_mappings)
       print('ElasticSearch index {} created!'.format(db_name))
     except:
       print('{} index already exist'.format(db_name))
-
-
-
 
 
 def main():
