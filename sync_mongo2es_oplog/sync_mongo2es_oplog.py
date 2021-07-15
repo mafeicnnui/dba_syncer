@@ -52,7 +52,8 @@ MONGO_SETTINGS = {
     "table"    : 'test.t1,test.t2',  #db:table
     "isSync"   :  True,
     "logfile"  :  "sync_mongo2es_oplog.log",
-    "debug"    :  True
+    "debug"    :  True,
+    "idx_name" : "easylife_cs"
 }
 
 '''
@@ -325,9 +326,16 @@ def incr_sync(config):
 '''
 def init_es(config):
     es=config['es']
-    for e in MONGO_SETTINGS['table'].split(','):
-        es.indices.create(index=e.split('.')[0], ignore=400)
-        print('ElasticSearch index {} created!'.format(e.split('.')[0]))
+    '''
+         //每张表建一个索引
+         for e in MONGO_SETTINGS['table'].split(','):
+            es.indices.create(index=e.split('.')[0], ignore=400)
+            print('ElasticSearch index {} created!'.format(e.split('.')[0]))
+    '''
+    # 通过定义索引名创建索引
+    es.indices.create(index=MONGO_SETTINGS['idx_name'], ignore=400)
+    print('ElasticSearch index {} created!'.format(MONGO_SETTINGS['idx_name']))
+
 
 '''
     功能：获取mongo,es连接对象
