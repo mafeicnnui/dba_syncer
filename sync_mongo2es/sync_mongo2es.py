@@ -241,6 +241,45 @@ def get_mongo_incr_where(config,tab):
     return v_json
 
 
+def get_es_incr_where(config,tab):
+    v_rq  = ''
+    v_day = tab.split(':')[2]
+    if v_day =='':
+       return {}
+    n_day = int(tab.split(':')[2])
+    v_col=tab.split(':')[1]
+
+    if config['sync_time_type']=='day':
+        if config['sync_time_data_type']=='unixTime':
+           v_rq = getUnixTime()-n_day*24*3600
+        else:
+           v_rq = (datetime.datetime.now() + datetime.timedelta(days=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+           v_rq = parser.parse(v_rq)
+
+    elif config['sync_time_type']=='hour':
+        if config['sync_time_data_type'] == 'unixTime':
+            v_rq = getUnixTime() - n_day * 3600
+        else:
+            v_rq = (datetime.datetime.now() + datetime.timedelta(hours=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+            v_rq = parser.parse(v_rq)
+    elif config['sync_time_type']=='min':
+        if config['sync_time_data_type'] == 'unixTime':
+            v_rq = getUnixTime() - n_day * 60
+        else:
+            v_rq = (datetime.datetime.now() + datetime.timedelta(minutes=-n_day)).strftime('%Y-%m-%dT%H:%M:%S.00Z')
+            v_rq = parser.parse(v_rq)
+    else:
+       v_rq =''
+
+    if v_rq =='':
+       return {}
+
+    v_json = {v_col: {"gte": v_rq}}
+    print('get_es_incr_where=',v_json)
+    return v_json
+
+
+
 def get_mongo_incr_where_pk(tab):
     v_day = tab.split(':')[2]
     if v_day =='':
@@ -321,13 +360,19 @@ def start_sync(config):
         start_time     = datetime.datetime.now()
         n_batch        = int(config['batch_size'])
         tab            = tabs.split(':')[0]
+        col            = tabs.split(':')[1]
         day            = tabs.split(':')[2]
         cur_mongo      = db_mongodb[tab]
         v_where        = get_mongo_incr_where(config,tabs)
+        v_es_where     = get_es_incr_where(config,tabs)
         results        = cur_mongo.find(v_where)
         n_totals       = results.count()
         if n_totals > 0 :
             print('{0} Increment sync table:{1},please wait...'.format(get_time(),tab))
+            print('Delete ElasticSearch data:',v_es_where)
+            es_query = {'query':{'range':v_es_where}} 
+            db_es.delete_by_query(index=config['index_name'].lower(),body=es_query,doc_type=tab)
+            time.sleep(3)
             i_counter = 0
             mylist    = []
             for r in results:

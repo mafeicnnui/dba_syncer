@@ -152,7 +152,6 @@ def print_dict(config):
            print(' '.ljust(3,' ')+key.ljust(20,' ')+'=',config[key])
     print('-'.ljust(125,'-'))
 
-
 def format_sql(v_sql):
     return v_sql.replace("\\","\\\\").replace("'","\\'")
 
@@ -195,7 +194,6 @@ def get_mongo_incr_where(config,tab):
     v_rq = parser.parse(v_rq)
     v_json = {v_col: {"$gte": v_rq}}
     return v_json
-
 
 def get_mongo_full_where(tab):
     v_rq  = ''
