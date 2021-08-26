@@ -368,7 +368,6 @@ def start_sync(config):
             print('{0} Increment sync table:{1},please wait...'.format(get_time(),tab))
             print('Delete ElasticSearch data:',v_es_where)
             es_query = {'query':{'range':v_es_where}}
-            print('es_query=',es_query)
             if es_query != {'query': {'range': {}}}:
                db_es.delete_by_query(index=config['index_name'].lower(),body=es_query,doc_type=tab)
             time.sleep(3)
