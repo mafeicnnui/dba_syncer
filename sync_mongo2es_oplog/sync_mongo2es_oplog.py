@@ -356,19 +356,6 @@ def incr_sync(config):
                                                              indent=4,
                                                              separators=(',', ':'))))
                         print('\n')
-                        # es_doc = {
-                        #     "_index": MONGO_SETTINGS['idx_name'],
-                        #     "_type": doc['ns'].split('.')[1],
-                        #     "_id": v_json['val'],
-                        #     # "_source": doc['o'],
-                        #     "_source": json.loads(json.dumps(doc['o'],
-                        #                                      cls=DateEncoder,
-                        #                                      ensure_ascii=False,
-                        #                                      indent=4,
-                        #                                      separators=(',', ':')))
-                        # }
-                        # actions.append(es_doc)
-                        # helpers.bulk(config['es'], actions)
                         es.delete(index=MONGO_SETTINGS['idx_name'],doc_type= doc['ns'].split('.')[1],id=v_json['val'])
                         # write_log(doc)
                     elif doc['op'] == 'u':
@@ -392,22 +379,6 @@ def incr_sync(config):
                                                              indent=4,
                                                              separators=(',', ':'))))
                         print('\n')
-
-                        # es_doc = {
-                        #     "_op_type": "update",
-                        #     "_index": MONGO_SETTINGS['idx_name'],
-                        #     "_type": doc['ns'].split('.')[1],
-                        #     "_id": doc['o2']['_id'],
-                        #     # "_source": v_json['val'],
-                        #     "doc": json.loads(json.dumps(v_json['val'],
-                        #                                      cls=DateEncoder,
-                        #                                      ensure_ascii=False,
-                        #                                      indent=4,
-                        #                                      separators=(',', ':')))
-                        # }
-                        # actions.append(es_doc)
-                        # helpers.bulk(config['es'], actions)
-
                         es.update(index=MONGO_SETTINGS['idx_name'],
                                   doc_type= doc['ns'].split('.')[1],
                                   id=doc['o2']['_id'],
