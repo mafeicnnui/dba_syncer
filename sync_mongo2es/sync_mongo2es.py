@@ -240,7 +240,6 @@ def get_mongo_incr_where(config,tab):
     print('get_mongo_incr_where=',v_json)
     return v_json
 
-
 def get_es_incr_where(config,tab):
     v_rq  = ''
     v_day = tab.split(':')[2]
@@ -277,8 +276,6 @@ def get_es_incr_where(config,tab):
     v_json = {v_col: {"gte": v_rq}}
     print('get_es_incr_where=',v_json)
     return v_json
-
-
 
 def get_mongo_incr_where_pk(tab):
     v_day = tab.split(':')[2]
@@ -370,8 +367,10 @@ def start_sync(config):
         if n_totals > 0 :
             print('{0} Increment sync table:{1},please wait...'.format(get_time(),tab))
             print('Delete ElasticSearch data:',v_es_where)
-            es_query = {'query':{'range':v_es_where}} 
-            db_es.delete_by_query(index=config['index_name'].lower(),body=es_query,doc_type=tab)
+            es_query = {'query':{'range':v_es_where}}
+            print('es_query=',es_query)
+            if es_query != {'query': {'range': {}}}:
+               db_es.delete_by_query(index=config['index_name'].lower(),body=es_query,doc_type=tab)
             time.sleep(3)
             i_counter = 0
             mylist    = []
@@ -451,7 +450,7 @@ def init_es(config):
       es.indices.create(index=config['index_name'].lower(),body =d_mappings)
       print('ElasticSearch index {} created!'.format(db_name))
     except:
-      print('{} index already exist'.format(db_name))
+      print('{} index already exist'.format(config['index_name'].lower()))
 
 
 def main():

@@ -50,14 +50,13 @@ MONGO_SETTINGS = {
     "db"       : 'local',
     "user"     : '',
     "passwd"   : '',
-    "table"    : 'easylife.estateHouse',
-    # "table"    : 'sync.xs',
+    "table"    : 'easylife.estate',
     # "table"   : 'easylife.estate,easylife.estateHouse',
     #"table"    : '',
     "isSync"   :  True,
     "logfile"  :  "sync_mongo2es_oplog.log",
     "debug"    :  True,
-    "idx_name" : "easylife0826"
+    "idx_name" : "easylife_cs4"
 }
 
 '''
@@ -220,6 +219,7 @@ def full_sync(config):
                                                           separators=(',', ':')) + '\n')
                     print("source doc：",doc)
 
+
                     # doc =json.dumps(doc,
                     #                                       cls=DateEncoder,
                     #                                       ensure_ascii=False,
@@ -239,7 +239,7 @@ def full_sync(config):
                             "_type"  : doc['ns'].split('.')[1],
                             "_id"    : id,
                             # "_source": doc['o']
-                            "doc": json.loads(json.dumps(doc['o'],
+                            "_source": json.loads(json.dumps(doc['o'],
                                                   cls=DateEncoder,
                                                   ensure_ascii=False,
                                                   indent=4,
@@ -306,7 +306,6 @@ def full_sync(config):
     功能：同步某个库下某张表数据
 '''
 def incr_sync(config):
-    es = config['es']
     cr = config['mongo']['oplog.rs']
     first = next(cr.find().sort('$natural', pymongo.DESCENDING).limit(-1))
     ts = first['ts']
@@ -323,104 +322,51 @@ def incr_sync(config):
                         v_json['op'] = 'insert'
                         v_json['obj'] = doc['ns']
                         v_json['val'] = doc['o']
-                        id = str(doc['o']['_id'])
-                        del doc['o']['_id']
-                        print('docstr=',json.loads(json.dumps(doc['o'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':'))))
-                        print('\n')
-
+                        v_json['val']['_id'] = str(v_json['val']['_id'])
                         es_doc = {
-                            "_index": MONGO_SETTINGS['idx_name'],
-                            "_type": doc['ns'].split('.')[1],
-                            "_id": id,
-                            "_source": json.loads(json.dumps(doc['o'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':')))
+                            "_index" : doc['ns'].split('.')[0],
+                            "_type"  : doc['ns'].split('.')[1],
+                            "_id"    : v_json['val']['_id'],
+                            "_source": doc
                         }
                         actions.append(es_doc)
                         helpers.bulk(config['es'], actions)
-                        # write_log(doc)
+                        write_log(doc)
                     elif doc['op'] == 'd':
-                        v_json['op'] = 'delete'
+                        v_json['op']  = 'delete'
                         v_json['obj'] = doc['ns']
                         v_json['val'] = str(doc['o']['_id'])
-                        doc['o']['_id'] = v_json['val']
-                        print('docstr=', json.loads(json.dumps(doc['o'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':'))))
-                        print('\n')
-                        # es_doc = {
-                        #     "_index": MONGO_SETTINGS['idx_name'],
-                        #     "_type": doc['ns'].split('.')[1],
-                        #     "_id": v_json['val'],
-                        #     # "_source": doc['o'],
-                        #     "_source": json.loads(json.dumps(doc['o'],
-                        #                                      cls=DateEncoder,
-                        #                                      ensure_ascii=False,
-                        #                                      indent=4,
-                        #                                      separators=(',', ':')))
-                        # }
-                        # actions.append(es_doc)
-                        # helpers.bulk(config['es'], actions)
-                        es.delete(index=MONGO_SETTINGS['idx_name'],doc_type= doc['ns'].split('.')[1],id=v_json['val'])
-                        # write_log(doc)
+                        es_doc = {
+                            "_index": doc['ns'].split('.')[0],
+                            "_type": doc['ns'].split('.')[1],
+                            "_id": v_json['val'],
+                            "_source": doc
+                        }
+                        actions.append(es_doc)
+                        helpers.bulk(config['es'], actions)
+                        write_log(es_doc)
                     elif doc['op'] == 'u':
                         v_json['op'] = 'update'
                         v_json['obj'] = doc['ns']
-
-                        if doc.get('o2', None) is not None:
-                            doc['o2']['_id'] = str(doc['o2']['_id'])
-
                         if doc['o'].get('$set', None) is not None:
                             v_json['val'] = doc['o']['$set']
                         else:
-                            if doc['o'].get('_id') is not None:
-                                del doc['o']['_id']
                             v_json['val'] = doc['o']
-                            # v_json['val']['_id'] = str(v_json['val']['_id'])
+                            v_json['val']['_id'] = str(v_json['val']['_id'])
+                        v_json['where'] = doc['o2']
+                        v_json['where']['_id'] = str(v_json['where']['_id'])
 
-                        print('docstr=', json.loads(json.dumps(v_json['val'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':'))))
-                        print('\n')
-
-                        # es_doc = {
-                        #     "_op_type": "update",
-                        #     "_index": MONGO_SETTINGS['idx_name'],
-                        #     "_type": doc['ns'].split('.')[1],
-                        #     "_id": doc['o2']['_id'],
-                        #     # "_source": v_json['val'],
-                        #     "doc": json.loads(json.dumps(v_json['val'],
-                        #                                      cls=DateEncoder,
-                        #                                      ensure_ascii=False,
-                        #                                      indent=4,
-                        #                                      separators=(',', ':')))
-                        # }
-                        # actions.append(es_doc)
-                        # helpers.bulk(config['es'], actions)
-
-                        es.update(index=MONGO_SETTINGS['idx_name'],
-                                  doc_type= doc['ns'].split('.')[1],
-                                  id=doc['o2']['_id'],
-                                  body={"doc":json.loads(json.dumps(v_json['val'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':')))}
-                                  )
-                        # write_log(doc)
+                        es_doc = {
+                            "_index": doc['ns'].split('.')[0],
+                            "_type": doc['ns'].split('.')[1],
+                            "_id": v_json['val']['_id'],
+                            "_source": doc
+                        }
+                        actions.append(es_doc)
+                        helpers.bulk(config['es'], actions)
+                        write_log(es_doc)
                     else:
                         pass
-
                     actions = []
 
 '''
@@ -485,11 +431,12 @@ def init_es2(config):
 
     print('mappings=',json.dumps(d_mappings, cls=DateEncoder, ensure_ascii=False, indent=4, separators=(',', ':')) + '\n')
     try:
-      es.indices.create(index=MONGO_SETTINGS['idx_name'].lower(), ignore=400,body =d_mappings)
+      es.indices.create(index=MONGO_SETTINGS['idx_name'].lower(),body =d_mappings)
       print('ElasticSearch index {} created!'.format(MONGO_SETTINGS['idx_name']))
     except:
       traceback.print_exc()
       print('{} index already exist'.format(MONGO_SETTINGS['idx_name']))
+
 
 
 '''
@@ -536,7 +483,6 @@ def print_cfg():
 
 '''
     功能：主函数   
-    curl '192.168.100.77:9200/easylife_cs4/estateHouse/6114c036b57bd70001d4080d?pretty'
 '''
 def main():
 
