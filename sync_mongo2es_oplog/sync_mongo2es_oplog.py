@@ -38,6 +38,9 @@ from bson import Timestamp
     
     4、查询同步日志
     tail -f sync_mongo2es_oplog.log
+    
+    5.在ES中查询某个文档
+     curl '192.168.100.77:9200/easylife_cs4/estateHouse/6114c036b57bd70001d4080d?pretty'
 '''
 
 
@@ -57,7 +60,7 @@ MONGO_SETTINGS = {
     "isSync"   :  True,
     "logfile"  :  "sync_mongo2es_oplog.log",
     "debug"    :  True,
-    "idx_name" : "easylife0826"
+    "idx_name" : "easylife0830"
 }
 
 '''
@@ -219,15 +222,6 @@ def full_sync(config):
                                                           indent=4,
                                                           separators=(',', ':')) + '\n')
                     print("source doc：",doc)
-
-                    # doc =json.dumps(doc,
-                    #                                       cls=DateEncoder,
-                    #                                       ensure_ascii=False,
-                    #                                       indent=4,
-                    #                                       separators=(',', ':')) + '\n'
-                    # doc = json.loads(doc)
-                    # print('doc=',doc,type(doc))
-
                     if doc['op'] == 'i':
                         v_json['op']  = 'insert'
                         v_json['obj'] = doc['ns']
@@ -344,7 +338,7 @@ def incr_sync(config):
                         }
                         actions.append(es_doc)
                         helpers.bulk(config['es'], actions)
-                        # write_log(doc)
+
                     elif doc['op'] == 'd':
                         v_json['op'] = 'delete'
                         v_json['obj'] = doc['ns']
@@ -357,8 +351,8 @@ def incr_sync(config):
                                                              separators=(',', ':'))))
                         print('\n')
                         es.delete(index=MONGO_SETTINGS['idx_name'],doc_type= doc['ns'].split('.')[1],id=v_json['val'])
-                        # write_log(doc)
                     elif doc['op'] == 'u':
+
                         v_json['op'] = 'update'
                         v_json['obj'] = doc['ns']
 
@@ -371,7 +365,6 @@ def incr_sync(config):
                             if doc['o'].get('_id') is not None:
                                 del doc['o']['_id']
                             v_json['val'] = doc['o']
-                            # v_json['val']['_id'] = str(v_json['val']['_id'])
 
                         print('docstr=', json.loads(json.dumps(v_json['val'],
                                                              cls=DateEncoder,
@@ -379,16 +372,46 @@ def incr_sync(config):
                                                              indent=4,
                                                              separators=(',', ':'))))
                         print('\n')
-                        es.update(index=MONGO_SETTINGS['idx_name'],
-                                  doc_type= doc['ns'].split('.')[1],
-                                  id=doc['o2']['_id'],
-                                  body={"doc":json.loads(json.dumps(v_json['val'],
-                                                             cls=DateEncoder,
-                                                             ensure_ascii=False,
-                                                             indent=4,
-                                                             separators=(',', ':')))}
-                                  )
-                        # write_log(doc)
+
+                        # 2021.08.30 更新时如果ES中无此文档，则将该object_id数据写入ES后再应用日志
+                        try:
+                            es.update(index=MONGO_SETTINGS['idx_name'],
+                                      doc_type= doc['ns'].split('.')[1],
+                                      id=doc['o2']['_id'],
+                                      body={"doc":json.loads(json.dumps(v_json['val'],
+                                                                 cls=DateEncoder,
+                                                                 ensure_ascii=False,
+                                                                 indent=4,
+                                                                 separators=(',', ':')))}
+                                      )
+                        except:
+                            print('Not found doc from  {} get data to es...'.format(doc['ns'].split('.')[1]))
+                            if doc.get('o2', None) is not None:
+                               res = config['mongo'].find({"_id":ObjectId(doc['o2']['_id'])})
+                               es_doc = {
+                                   "_index": MONGO_SETTINGS['idx_name'],
+                                   "_type": doc['ns'].split('.')[1],
+                                   "_id": doc['o2']['_id'],
+                                   "_source": json.loads(json.dumps(res,
+                                                                    cls=DateEncoder,
+                                                                    ensure_ascii=False,
+                                                                    indent=4,
+                                                                    separators=(',', ':')))
+                               }
+                               actions.append(es_doc)
+                               helpers.bulk(config['es'], actions)
+
+                            print('apply update oplog...for {}'.format(format(doc['ns'].split('.')[1])))
+                            es.update(index=MONGO_SETTINGS['idx_name'],
+                                      doc_type=doc['ns'].split('.')[1],
+                                      id=doc['o2']['_id'],
+                                      body={"doc": json.loads(
+                                           json.dumps(v_json['val'],
+                                                      cls=DateEncoder,
+                                                      ensure_ascii=False,
+                                                      indent=4,
+                                                      separators=(',', ':')))}
+                                      )
                     else:
                         pass
 
@@ -506,8 +529,7 @@ def print_cfg():
 
 
 '''
-    功能：主函数   
-    curl '192.168.100.77:9200/easylife_cs4/estateHouse/6114c036b57bd70001d4080d?pretty'
+    功能：主函数      
 '''
 def main():
 
