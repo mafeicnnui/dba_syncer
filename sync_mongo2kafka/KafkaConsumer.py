@@ -35,12 +35,16 @@ class Kafka_consumer():
 '''
   功能：Kafka连接配置
 '''
+# KAFKA_SETTINGS = {
+#     "host"  : "39.106.184.57", #39.106.184.57
+#     "port"  : "9092",
+#     "topic" : 'mallcoo_saledetail_for_ocr' # 猫酷消售数据 - 李毅豪
+# }
 KAFKA_SETTINGS = {
-    "host"  : "39.106.184.57", #39.106.184.57
-    "port"  : "9092",
-    "topic" : 'mallcoo_saledetail_for_ocr' # 猫酷消售数据 - 李毅豪
+    "host"  : '10.2.39.81', #39.106.184.57
+    "port"  :  9092,
+    "topic" : 'hst_source_tdsql_test'
 }
-
 '''
     功能：将datatime类型序列化json可识别类型
 '''

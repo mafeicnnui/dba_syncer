@@ -5,14 +5,7 @@
       <paths name="hopson@10.2.39.17:65508_dba_syncer">
         <serverdata>
           <mappings>
-            <mapping deploy="dba_syncer" local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="hopson@10.2.39.17:65508_dba_tools">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
@@ -23,14 +16,7 @@
           </mappings>
         </serverdata>
       </paths>
-      <paths name="hopson@10.2.39.17:65508_dbops2.0">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="hopson@10.2.39.17:65508_easebase">
+      <paths name="hopson@10.2.39.17:65508_webssh">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
@@ -45,13 +31,6 @@
         </serverdata>
       </paths>
       <paths name="hopson@10.2.39.18:65508_dbops">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="hopson@10.2.39.18:65508_easebase">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
@@ -80,20 +59,6 @@
         </serverdata>
       </paths>
       <paths name="hopson@10.2.39.21:65508_dbops">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="root@192.168.20.128:22">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="root@192.168.20.13:22">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />

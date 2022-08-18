@@ -9,6 +9,7 @@ import pymongo
 import json
 import datetime
 import sys,os
+from uuid import UUID
 from pymongo.cursor import CursorType
 from kafka  import KafkaProducer
 from kafka.errors import KafkaError
@@ -47,14 +48,26 @@ MONGO_SETTINGS = {
 '''
     功能：Mongo 单实例连接配置
 '''
+# MONGO_SETTINGS = {
+#     "host"     : 'dds-2ze8179ceab498d41.mongodb.rds.aliyuncs.com',
+#     "port"     : '3717',
+#     "db"       : 'admin',
+#     "user"     : 'root',
+#     "passwd"   : 'Mongo-kkm!2019',
+#     "db_name"  : 'posB',
+#     "tab_name" : 'saleDetail',
+#     "isSync"   :  True,
+#     "logfile"  :  "sync_mongo2kafka.log"
+# }
+
 MONGO_SETTINGS = {
-    "host"     : 'dds-2ze8179ceab498d41.mongodb.rds.aliyuncs.com',
-    "port"     : '3717',
+    "host"     : '140.143.229.98',
+    "port"     : '48011',
     "db"       : 'admin',
-    "user"     : 'root',
-    "passwd"   : 'Mongo-kkm!2019',
-    "db_name"  : 'posB',
-    "tab_name" : 'saleDetail',
+    "user"     : 'mongouser',
+    "passwd"   : 'Dev21@block2022',
+    "db_name"  : 'test',
+    "tab_name" : 'xs',
     "isSync"   :  True,
     "logfile"  :  "sync_mongo2kafka.log"
 }
@@ -63,9 +76,9 @@ MONGO_SETTINGS = {
     功能：Kafka连接配置
 '''
 KAFKA_SETTINGS = {
-    "host"  : '172.17.194.79', #39.106.184.57
+    "host"  : '10.2.39.81', #39.106.184.57
     "port"  :  9092,
-    "topic" : 'mallcoo_saledetail_for_ocr'
+    "topic" : 'hst_source_tdsql_test'
 }
 
 '''
@@ -79,6 +92,9 @@ class DateEncoder(json.JSONEncoder):
 
         elif isinstance(obj, datetime.date):
             return obj.strftime("%Y-%m-%d")
+
+        elif isinstance(obj, UUID):
+            return obj.hex
 
         else:
             return json.JSONEncoder.default(self, obj)

@@ -5,12 +5,45 @@
 # @File : mysql2kafka_sync.py.py
 # @Software: PyCharm
 
-import json,datetime,time,sys
+import json
+import datetime
 import pymysql
+import decimal
+import traceback
 from kafka  import KafkaProducer
+from kafka.client_async import KafkaClient
 from kafka.errors import KafkaError
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.row_event import (DeleteRowsEvent,UpdateRowsEvent,WriteRowsEvent)
+
+# MYSQL_SETTINGS = {
+#     "host"  : "10.2.39.18",
+#     "port"  : 3306,
+#     "user"  : "puppet",
+#     "passwd": "Puppet@123",
+#     "db"    : "puppet"
+# }
+
+MYSQL_SETTINGS = {
+    "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
+    "port"  : 29333,
+    "user"  : "root",
+    "passwd": "Dev21@block2022",
+    "db"    : "21block"
+}
+
+
+# KAFKA_SETTINGS = {
+#     "host"  : "10.2.39.18",
+#     "port"  :  9092,
+#     "topic" : 'mysql2kafka'
+# }
+
+KAFKA_SETTINGS = {
+    "host"  : "10.2.39.81",
+    "port"  :  9092,
+    "topic" : 'hst_source_tdsql_test'
+}
 
 class Kafka_producer():
     '''
@@ -46,6 +79,8 @@ class DateEncoder(json.JSONEncoder):
         elif isinstance(obj, datetime.date):
             return obj.strftime("%Y-%m-%d")
 
+        elif isinstance(obj, decimal.Decimal):
+            return float(obj)
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -60,20 +95,6 @@ def get_event_name(event):
        return 'DeleteRowsEvent'.ljust(20,' ')+':'
     else:
        return ''.ljust(30,' ')
-
-MYSQL_SETTINGS = {
-    "host"  : "10.2.39.18",
-    "port"  : 3307,
-    "user"  : "puppet",
-    "passwd": "Puppet@123",
-    "db"    : "test"
-}
-
-KAFKA_SETTINGS = {
-    "host"  : "10.2.39.18",
-    "port"  :  9092,
-    "topic" : 'mysql2kafka'
-}
 
 def get_master_pos(file=None,pos=None):
     db = get_db(MYSQL_SETTINGS)
@@ -92,6 +113,8 @@ def get_ds_mysql(ip,port,service ,user,password):
 def get_db(config):
     return get_ds_mysql(config['host'],config['port'],config['db'],config['user'],config['passwd'])
 
+def create_topic():
+    pass
 
 def main():
     while True:
@@ -106,6 +129,8 @@ def main():
                                         )
 
             producer = Kafka_producer(KAFKA_SETTINGS['host'], KAFKA_SETTINGS['port'], KAFKA_SETTINGS['topic'])
+            # client = KafkaClient()
+            # client.add_topic()
 
             schema = MYSQL_SETTINGS['db']
 
@@ -113,13 +138,9 @@ def main():
 
                 if binlogevent.event_type in (2,):
                     event = {"schema": bytes.decode(binlogevent.schema), "query": binlogevent.query.lower()}
-                    #print('event1=>',event)
                     if 'create' in event['query'] or 'drop' in event['query'] \
                             or 'alter' in event['query'] or 'truncate' in event['query']:
-
                         if event['schema'] == schema:
-                            #print('event2=>',get_event_name(binlogevent.event_type), event)
-                            #print(binlogevent.query.lower())
                             producer.sendjsondata(event)
 
 
@@ -130,24 +151,26 @@ def main():
                             if isinstance(binlogevent, DeleteRowsEvent):
                                 event["action"] = "delete"
                                 event["data"] = row["values"]
-                                #print('delete=',event)
+                                print(event)
                                 producer.sendjsondata(event)
                             elif isinstance(binlogevent, UpdateRowsEvent):
                                 event["action"] = "update"
                                 event["after_values"] = row["after_values"]
                                 event["before_values"] = row["before_values"]
-                                #print('update=',event)
+                                print(event)
                                 producer.sendjsondata(event)
                             elif isinstance(binlogevent, WriteRowsEvent):
                                 event["action"] = "insert"
                                 event["data"] = row["values"]
-                                #print('insert=', event)
+                                print(event)
                                 producer.sendjsondata(event)
 
 
         except Exception as e:
-            print('Exception=',str(e))
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
-    main()
+      main()
+
+      # 优化程序，一张表写一个topic,或一个库一个topic
