@@ -59,28 +59,25 @@
 
 |  参数名	 |参数描述   |
 | :------------ | :------------ |
-| host     |  MongoDB 数据库IP,复本集配置IP以逗号分隔 |
-| port     | MongoDB 数据库PORT,复本集配置PORT以逗号分隔  |
-| db       | MongoDB 认证数据库名  |
-| user     |MongoDB 用户名  |
-| passwd   |MongoDB 口令   |
-| replset  |MongoDB复本集名称，为空时表示连接单实例   |
-| db_name  | 定义监控的数据库名称  |
-| tab_name | 定义监控的表名称,多张表用逗号隔开  |
 | isSync | 是否启用同步  |
-| isInit | 是否进行全量初始化  |
+| level | 写入ES文档的层次，只支持1，2  |
+| db       | MySQL 同步库名  |
+| table    | MySQL 同步表名  |
 | logfile | 同步日志文件名  |
+| batch   |全量同步批大小   |
+| debug  |打开调试模式 Y,关闭：N  |
 
 
- 2.3 KAFKA_SETTINGS 参数说明：
+ 2.3 MYSQL_SETTINGS 参数说明：
 
 ------------
 
 |  参数名	 |参数描述   |
 | :------------ | :------------ |
-| host  | 配置 kafka 数据库IP    |
-| port  | 配置 kafka 数据库PORT  |
-| topic | 配置 kafka topic名称   |
+| host  | 配置 MySQL 数据库IP    |
+| port  | 配置 MySQL 数据库PORT  |
+| user | 配置 MySQL 用户   |
+| passwd  | 配置 MySQL 密码  |
 
  2.4 ES_SETTINGS 参数说明：
 
