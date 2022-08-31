@@ -102,5 +102,5 @@
    
    windows:
    
-       d:\apps\python3.6\python.exe mysql2es_sync.py -conf=mysql2es_sync.json
+       python.exe mysql2es_sync.py -conf=mysql2es_sync.json
 
