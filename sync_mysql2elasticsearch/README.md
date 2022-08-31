@@ -43,7 +43,7 @@
         "port": "9200",
         "schema": "http",
         "user": "elastic",
-        "passwd": "21block@2022",
+        "passwd": "elastic",
         "index": "21block_cluster_info2",
         "batch": 3,
         "mapping": {
