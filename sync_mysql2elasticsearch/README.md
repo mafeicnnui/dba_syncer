@@ -1,130 +1,109 @@
-# 安装驱动
-export PYTHON3_HOME=/home/hopson/apps/usr/webserver/dba/python3.6.8
-export LD_LIBRARY_PATH=$PYTHON3_HOME/lib
-$PYTHON3_HOME/bin/pip3 install elasticsearch==7.14 -i https://pypi.douban.com/simple
-$PYTHON3_HOME/bin/pip3 install mysql-replication==0.24 -i https://pypi.douban.com/simple
 
-ES 7.14.2 测试
-curl --user elastic:elastic 10.2.39.17:9200/_cat/health?v
-curl --user elastic:elastic 10.2.39.17:9200/test/block_users/315282917172711424?pretty
+**一、概述**
+
+------------
 
 
-ES 7.14.2 腾讯云测试
-https://cloud.tencent.com/document/product/845/19538
+   功能：MySQL向ElasticSearch数据同步工具。基于PYTHON3.6语言开发，支持MySQL5.6,MySQL5.7,TDSQL-MySQL-C 表实时同步至ElasticSearch中，通过解析oplog实现。
 
+   1.1 安装python3.6
 
-from elasticsearch import Elasticsearch
-es = Elasticsearch(
-["
-https://es-0h3xrqrp.public.tencentelasticsearch.com:9200"],
-http_auth=('elastic','XXXXXXX'),
-sniff_on_start=False,
-sniff_on_connection_fail=False,
-sniffer_timeout=None)
-res = es.index(index="my_indextest", doc_type="_doc", id=1, body={"title": "One", "tags":
-["ruby"]})
-print(res)
-res = es.get(index="my_indextest", doc_type="_doc", id=1)
-print(res
-['_source'])
+     yum -y install python36
 
-curl --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_block_users/_doc/997?pretty
-curl --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_block_users/_mapping?pretty
-curl -XDELETE --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_block_users?pretty
+   1.2 安装依赖
 
--- HY
-curl --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_cluster_info2/_doc/22?pretty
-curl --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_cluster_info/_mapping?pretty
-curl -XDELETE --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_cluster_info?pretty
-curl -XDELETE --user elastic:21block@2022 https://es-4nokrpqb.public.tencentelasticsearch.com:9200/21block_cluster_info2?pretty
+     pip3 install -r requirements.txt
+   
 
+**二、配置文件**
 
-curl 10.2.39.41:9200/test?pretty
-curl 10.2.39.41:9200/test/xs/35?pretty
-curl 10.2.39.41:9200/test/xs/_search?pretty
-curl 10.2.39.41:9200/test/xs/_mapping?pretty
-curl '10.2.39.41:9200/test/xs/_search?pretty' -d '
-{
-  "query": {
-    "bool": {
-      "must": [
-        {"term":{"data.xh":3}}
-      ]
-    }
-  }
-}'
-
-curl '10.2.39.41:9200/test/xs/_search?pretty' -d '
-{
-  "query": {
-    "bool": {
-      "must": [
-        {"term":{"data.xm":"zhang.san"}}
-      ]
-    }
-  }
-}'
-
-curl '10.2.39.41:9200/test/xs/_search?pretty' -d '
-{
-  "query": {
-    "bool": {
-      "must": [
-        {"match":{"data.xm":"zhang.san"}}
-      ]
-    }
-  }
-}'
-curl '10.2.39.41:9200/test/xs/_search?pretty' -d '
-{
-  "query": {
-    "bool": {
-      "must": [
-        {"match":{"after_values.xh":35}}
-      ]
-    }
-  }
-}'
+------------
+ 
+   2.1 sync_mysql2es.json 参数说明
+   
+    "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "level"    : "1",
+        "db"       : "block_cluster",
+        "table"    : "cluster_info",
+        "logfile"  : "sync_mysql2es.log",
+        "batch"    : 5,
+        "debug"    : "Y"
+    },
     
-es = get_ds_es(ES_SETTINGS['host'], ES_SETTINGS['port'])
-es = get_ds_es_auth(ES_SETTINGS['host'], ES_SETTINGS['port'],ES_SETTINGS['user'], ES_SETTINGS['passwd'])
-
-pip3 install elasticsearch==7.14.0 -i https://pypi.douban.com/simple
-pip3 install  mysql-replication==0.21  -i https://pypi.douban.com/simple
-pip3 install  PyMySQL==0.9.2  -i https://pypi.douban.com/simple_
-pip3 install -r requirements.txt
-
-D:\apps\python3.6\python.exe mysql2es_sync.py --conf=mysql2es_sync.json
-cd /home/hopson/apps/usr/webserver/dba_syncer/sync_mysql2elasticsearch
-python3 mysql2es_sync.py --conf=mysql2es_sync.json
-
-curl -XDELETE --user elastic:21block@2022 192.168.3.43:9200/21block_cluster_info2?pretty
-curl --user elastic:21block@2022 192.168.3.43:9200/21block_cluster_info2/_doc/22?pretty
-
-
-"SYNC_SETTINGS"  : {
-    "isSync"   : true,
-    "level"    : "1",
-    "db"       : "block_cluster",
-    "table"    : "cluster_info",
-    "logfile"  : "sync_mysql2es.log",
-    "batch"    : 5,
-    "debug"    : "Y"
-},
-
-"MYSQL_SETTINGS" : {
-    "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
-    "port"  : 29333,
-    "user"  : "root",
-    "passwd": "Dev21@block2022"
-},
-
- "ES_SETTINGS": {
-        "host": "es-4nokrpqb.public.tencentelasticsearch.com",
+    "MYSQL_SETTINGS" : {
+        "host"  : "192.168.3.5",
+        "port"  : 3306,
+        "user"  : "root",
+        "passwd": "Dev21@block2022"
+    },
+    
+    "ES_SETTINGS": {
+        "host": "192.168.3.43",
         "port": "9200",
-        "schema": "https",
+        "schema": "http",
         "user": "elastic",
         "passwd": "21block@2022",
         "index": "21block_cluster_info2",
         "batch": 3,
-}
+        "mapping": {
+            "mappings": {
+            }
+        }
+    }
+
+        
+------------
+
+  2.2 SYNC_SETTINGS参数说明
+
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| host     |  MongoDB 数据库IP,复本集配置IP以逗号分隔 |
+| port     | MongoDB 数据库PORT,复本集配置PORT以逗号分隔  |
+| db       | MongoDB 认证数据库名  |
+| user     |MongoDB 用户名  |
+| passwd   |MongoDB 口令   |
+| replset  |MongoDB复本集名称，为空时表示连接单实例   |
+| db_name  | 定义监控的数据库名称  |
+| tab_name | 定义监控的表名称,多张表用逗号隔开  |
+| isSync | 是否启用同步  |
+| isInit | 是否进行全量初始化  |
+| logfile | 同步日志文件名  |
+
+
+ 2.3 KAFKA_SETTINGS 参数说明：
+
+------------
+
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| host  | 配置 kafka 数据库IP    |
+| port  | 配置 kafka 数据库PORT  |
+| topic | 配置 kafka topic名称   |
+
+ 2.4 ES_SETTINGS 参数说明：
+
+------------
+
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| host  | 配置 ES 数据库IP或域名    |
+| port  | 配置 ES 端口  |
+| schema | 配置 ES 协议值为http或https   |
+| user  | 配置 ES 连接用户  |
+| passwd | 配置 ES 连接密码   |
+| index  | 配置 ES 索引名  |
+| mapping | 配置 索引 mapping   |
+------------
+
+**三、启动同步**
+
+   linux:
+   
+       nohup python3 python3 mysql2es_sync.py --conf=mysql2es_sync.json &
+   
+   windows:
+   
+       d:\apps\python3.6\python.exe mysql2es_sync.py -conf=mysql2es_sync.json
+

@@ -23,7 +23,6 @@
         "user": "elastic",
         "passwd": "21block@2022",
         "index": "21block_cluster_info2",
-        "batch": 3,
         "mapping": {
             "mappings": {
                 "dynamic_templates": [
