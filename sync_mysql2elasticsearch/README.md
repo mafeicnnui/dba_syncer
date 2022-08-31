@@ -35,7 +35,7 @@
         "host"  : "192.168.3.5",
         "port"  : 3306,
         "user"  : "root",
-        "passwd": "Dev21@block2022"
+        "passwd": "root"
     },
     
     "ES_SETTINGS": {

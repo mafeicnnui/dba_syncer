@@ -13,7 +13,7 @@
         "host"  : "192.168.3.5",
         "port"  : 3306,
         "user"  : "root",
-        "passwd": "Dev21@block2022"
+        "passwd": "root"
     },
 
     "ES_SETTINGS": {
@@ -21,7 +21,7 @@
         "port": "9200",
         "schema": "http",
         "user": "elastic",
-        "passwd": "elastic",
+        "passwd": "21block@2022",
         "index": "21block_cluster_info2",
         "mapping": {
             "mappings": {
