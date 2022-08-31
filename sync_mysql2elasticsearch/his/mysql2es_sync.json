@@ -1,0 +1,190 @@
+{
+  "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "level"    : "2",
+        "db"       : "block_user",
+        "table"    : "block_users",
+        "logfile"  : "sync_mysql2elasticsearch.log",
+        "batch"    : 5,
+        "debug"    : "Y"
+   },
+
+   "MYSQL_SETTINGS" : {
+        "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
+        "port"  : 29333,
+        "user"  : "root",
+        "passwd": "Dev21@block2022"
+    },
+
+    "ES_SETTINGS":  {
+        "host"  : "es-4nokrpqb.public.tencentelasticsearch.com",
+        "port"  : "9200",
+        "user"  : "elastic",
+        "passwd": "21block@2022",
+        "index" :  "21block_block_users",
+        "batch" : 3,
+        "mapping" :{
+            "mappings":
+                {
+                "dynamic_templates":
+                [
+                    {
+                        "message_full":
+                        {
+                            "match": "message_full",
+                            "mapping":
+                            {
+                                "fields":
+                                {
+                                    "keyword":
+                                    {
+                                        "ignore_above": 2048,
+                                        "type": "keyword"
+                                    }
+                                },
+                                "type": "text"
+                            }
+                        }
+                    },
+                    {
+                        "message":
+                        {
+                            "match": "message",
+                            "mapping":
+                            {
+                                "type": "text"
+                            }
+                        }
+                    },
+                    {
+                        "strings":
+                        {
+                            "match_mapping_type": "string",
+                            "mapping":
+                            {
+                                "type": "keyword"
+                            }
+                        }
+                    }
+                ],
+                "properties":
+                {
+                    "block_users":
+                    {
+                        "properties":
+                        {
+                            "auth_flag":
+                            {
+                                "type": "integer"
+                            },
+                            "background_img":
+                            {
+                                "type": "keyword"
+                            },
+                            "bir_day":
+                            {
+                                "type": "integer"
+                            },
+                            "bir_month":
+                            {
+                                "type": "integer"
+                            },
+                            "bir_year":
+                            {
+                                "type": "integer"
+                            },
+                            "birthday":
+                            {
+                                "type": "date"
+                            },
+                            "constellation":
+                            {
+                                "type": "keyword"
+                            },
+                            "head_img":
+                            {
+                                "type": "keyword"
+                            },
+                            "introduction":
+                            {
+                                "type": "text",
+                                "analyzer": "ik_max_word"
+                            },
+                            "mobile":
+                            {
+                                "type": "keyword"
+                            },
+                            "nick_name":
+                            {
+                                "type": "text",
+                                "analyzer": "ik_max_word"
+                            },
+                            "personl_id":
+                            {
+                                "type": "keyword"
+                            },
+                            "regist_time":
+                            {
+                                "type": "date"
+                            },
+                            "regist_way":
+                            {
+                                "type": "integer"
+                            },
+                            "sex":
+                            {
+                                "type": "integer"
+                            },
+                            "state":
+                            {
+                                "type": "integer"
+                            },
+                            "update_time":
+                            {
+                                "type": "date"
+                            }
+                        }
+                    },
+                    "lables":
+                    {
+                        "type": "object"
+                    },
+                    "location":
+                    {
+                        "type": "geo_point"
+                    },
+                    "recommend":
+                    {
+                        "properties":
+                        {
+                            "albumsNum":
+                            {
+                                "type": "integer"
+                            },
+                            "city":
+                            {
+                                "type": "integer"
+                            },
+                            "contentNum":
+                            {
+                                "type": "integer"
+                            },
+                            "heartNum":
+                            {
+                                "type": "integer"
+                            },
+                            "openTime":
+                            {
+                                "type": "date"
+                            },
+                            "recommend":
+                            {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                }
+            }
+            }
+    }
+}

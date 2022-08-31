@@ -1,0 +1,2 @@
+pymongo==3.9.0
+kafka-python==2.0.2

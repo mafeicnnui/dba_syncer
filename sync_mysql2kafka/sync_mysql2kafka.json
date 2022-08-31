@@ -1,0 +1,38 @@
+{
+    "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "isInit"   : true,
+        "logfile"  : "sync_mysql2kafka.log",
+        "batch"    : 5,
+        "debug"    : "Y",
+        "db"       : "21block",
+        "table"    : "xs1,xs2"
+   },
+
+   "MYSQL_SETTINGS" : {
+      "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
+      "port"  : 29333,
+      "user"  : "root",
+      "passwd": "Dev21@block2022"
+   },
+
+   "KAFKA_SETTINGS":  {
+        "host"  : "10.2.39.81",
+        "port"  : "9092",
+        "topic" : "hst_source_tdsql_test4",
+        "templete": {
+            "data":[],
+            "database":"",
+            "isDdl":false,
+            "old":null,
+            "pkNames":[
+                "_id"
+            ],
+            "sql":"",
+            "table":"",
+            "ts":0,
+            "type":""
+        }
+   }
+
+}

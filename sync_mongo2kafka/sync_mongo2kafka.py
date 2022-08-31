@@ -5,86 +5,85 @@
 # @File : sync_mongo_oplog.py
 # @Software: PyCharm
 
+import time
 import pymongo
 import json
 import datetime
 import sys,os
+import logging
+import argparse
 from uuid import UUID
+from bson.objectid import ObjectId
 from pymongo.cursor import CursorType
 from kafka  import KafkaProducer
 from kafka.errors import KafkaError
 
 '''
-# 演示环境 MongoDB 副本集
-
-MONGO_SETTINGS = {
-    "host"     : '10.2.39.171,10.2.39.170,10.2.39.169',
-    "port"     : '27016,27016,27016',
-    "db"       : 'local',
-    "user"     : '',
-    "passwd"   : '',
-    "replset"  : 'hopsondemo'
-}
-
-KAFKA_SETTINGS = {
-    "host"  : '10.2.39.18',
-    "port"  :  9092,
-    "topic" : 'sync_mongo2kafka'
-}
-
-# Mongo 副本集连接配置
-MONGO_SETTINGS = {
-    "host"     : '172.17.194.79,172.17.129.195,172.17.129.194',
-    "port"     : '27016,27017,27018',
-    "db"       : 'admin',
-    "user"     : 'root',
-    "passwd"   : 'YxBfV0Q3ne6z6rny',
-    "replset"  : 'posb',
-    "db_name"  : 'posB',
-    "tab_name" : 'saleDetail',
-}
+  1.初始全量同步：表加锁+全量初始化+释放锁+增量同步
+  2.增量同步成功后增量检查点至文件中
+  3.每次启动都会进行全量同步，数据会重复
+  4.根据袁林提供的模板写消息DML
+  5.增加开关是否写DDL事件
+  6.KAFKA报错:Failed to update metadata after 60.0 secs.
+  7.全量同步开始记录ts,全量同步后增量同步从大于等于ts开始同步
+  
 '''
 
-'''
-    功能：Mongo 单实例连接配置
-'''
-# MONGO_SETTINGS = {
-#     "host"     : 'dds-2ze8179ceab498d41.mongodb.rds.aliyuncs.com',
-#     "port"     : '3717',
-#     "db"       : 'admin',
-#     "user"     : 'root',
-#     "passwd"   : 'Mongo-kkm!2019',
-#     "db_name"  : 'posB',
-#     "tab_name" : 'saleDetail',
-#     "isSync"   :  True,
-#     "logfile"  :  "sync_mongo2kafka.log"
-# }
-
-MONGO_SETTINGS = {
-    "host"     : '140.143.229.98',
-    "port"     : '48011',
-    "db"       : 'admin',
-    "user"     : 'root',
-    "passwd"   : 'root',
-    "db_name"  : 'test',
-    "tab_name" : 'xs',
-    "isSync"   :  True,
-    "logfile"  :  "sync_mongo2kafka.log"
+KAFKA_INSERT_TEMPLETE = {
+    "data":[],
+    "database":"",
+    "isDdl":False,
+    "old":None,
+    "pkNames":[
+        "_id"
+    ],
+    "sql":"",
+    "table":"",
+    "ts":0,
+    "type":"INSERT"
 }
 
-'''
-    功能：Kafka连接配置
-'''
-KAFKA_SETTINGS = {
-    "host"  : '10.2.39.81', #39.106.184.57
-    "port"  :  9092,
-    "topic" : 'hst_source_tdsql_test'
+KAFKA_DELETE_TEMPLETE = {
+    "data":[],
+    "database":"",
+    "isDdl":False,
+    "old":None,
+    "pkNames":[
+        "_id"
+    ],
+    "sql":"",
+    "table":"",
+    "ts":0,
+    "type":"DELETE"
 }
+
+KAFKA_UPDATE_TEMPLETE = {
+    "data":[],
+    "database":"",
+    "isDdl":False,
+    "old":None,
+    "pkNames":[
+        "_id"
+    ],
+    "sql":"",
+    "table":"",
+    "ts":0,
+    "type":"UPDATE"
+}
+
+
+'''
+    功能：读json配置文件转为dict
+'''
+def read_json(file):
+    with open(file, 'r') as f:
+         cfg = json.loads(f.read())
+    return cfg
+
 
 '''
     功能：将datatime类型序列化json可识别类型
 '''
-
 class DateEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime.datetime):
@@ -95,7 +94,8 @@ class DateEncoder(json.JSONEncoder):
 
         elif isinstance(obj, UUID):
             return obj.hex
-
+        elif isinstance(obj, ObjectId):
+            return str(obj)
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -116,6 +116,25 @@ def get_ds_mongo_auth(mongodb_str):
         db.authenticate(user, password)
         db = conn['local']
     return db
+
+'''
+    功能：mongo 单实例认证,连接指定DB
+    入口：mongo 连接串，格式：IP:PORT:DB:USER:PASSWD
+    出口：mongo 数据库连接对象
+'''
+def get_ds_mongo_auth_db(mongodb_str,conn_db):
+    ip            = mongodb_str.split(':')[0]
+    port          = mongodb_str.split(':')[1]
+    service       = mongodb_str.split(':')[2]
+    user          = mongodb_str.split(':')[3]
+    password      = mongodb_str.split(':')[4]
+    conn          = pymongo.MongoClient('mongodb://{0}:{1}/'.format(ip,int(port)))
+    db            = conn[service]
+    if user != '' and password != '':
+        db.authenticate(user, password)
+        db = conn[conn_db]
+    return db
+
 
 '''
     功能：mongo 副本集认证
@@ -141,6 +160,15 @@ def get_ds_mongo_auth_replset(mongodb_str,replset_name):
     return db
 
 '''
+    功能：打印配置
+'''
+def print_cfg(config):
+    print('Mongodb config:')
+    print_dict(config['mongo'])
+    print('Kafka config:')
+    print_dict(config['kafka'])
+
+'''
     功能：kafka 生产对象类   
 '''
 class Kafka_producer():
@@ -151,10 +179,8 @@ class Kafka_producer():
         self.kafkaHost = kafkahost
         self.kafkaPort = kafkaport
         self.kafkatopic = kafkatopic
-        self.producer = KafkaProducer(bootstrap_servers='{kafka_host}:{kafka_port}'.format(
-            kafka_host=self.kafkaHost,
-            kafka_port=self.kafkaPort
-        ))
+        self.kafkaServer = [(k+':'+str(v)) for k,v in dict(zip(self.kafkaHost,self.kafkaPort)).items()]
+        self.producer = KafkaProducer(bootstrap_servers=self.kafkaServer)
 
     def sendjsondata(self, params):
         try:
@@ -208,39 +234,37 @@ def write_log(doc):
        doc['o2']['_id'] = str(doc['o2']['_id'])
 
     doc=preprocessor(doc)
-
-    with open(MONGO_SETTINGS['logfile'], 'a') as f:
-        f.write(json.dumps(doc, cls=DateEncoder,ensure_ascii=False, indent=4, separators=(',', ':'))+'\n')
+    logging.info(json.dumps(doc, cls=DateEncoder,ensure_ascii=False, indent=4, separators=(',', ':'))+'\n')
 
 '''
     功能：获取mongo,es连接对象
 '''
-def get_config():
+def get_config(cfg):
     config={}
-    # 获取kafka生产者对象
-    producer = Kafka_producer(KAFKA_SETTINGS['host'], KAFKA_SETTINGS['port'], KAFKA_SETTINGS['topic'])
+    producer = Kafka_producer(cfg['KAFKA_SETTINGS']['host'].split(','), cfg['KAFKA_SETTINGS']['port'].split(','), cfg['KAFKA_SETTINGS']['topic'])
     config['producer'] = producer
-    KAFKA_SETTINGS['producer'] = producer
+    config['kafka'] = cfg['KAFKA_SETTINGS']
+    config['sync_settings'] = cfg['SYNC_SETTINGS']
 
-    # 获取mongo数据库对象
-    if MONGO_SETTINGS.get('replset') is None or MONGO_SETTINGS.get('replset') == '':
+    if cfg['MONGO_SETTINGS'].get('replset') is None or cfg['MONGO_SETTINGS'].get('replset') == '':
         mongo = get_ds_mongo_auth('{0}:{1}:{2}:{3}:{4}'.
-                                  format(MONGO_SETTINGS['host'],
-                                         MONGO_SETTINGS['port'],
-                                         MONGO_SETTINGS['db'],
-                                         MONGO_SETTINGS['user'],
-                                         MONGO_SETTINGS['passwd']))
+                                  format(cfg['MONGO_SETTINGS']['host'],
+                                         cfg['MONGO_SETTINGS']['port'],
+                                         cfg['MONGO_SETTINGS']['db'],
+                                         cfg['MONGO_SETTINGS']['user'],
+                                         cfg['MONGO_SETTINGS']['passwd']))
     else:
         mongo = get_ds_mongo_auth_replset('{0}:{1}:{2}:{3}:{4}'.
-                                          format(MONGO_SETTINGS['host'],
-                                                 MONGO_SETTINGS['port'],
-                                                 MONGO_SETTINGS['db'],
-                                                 MONGO_SETTINGS['user'],
-                                                 MONGO_SETTINGS['passwd']),
-                                          MONGO_SETTINGS['replset'])
+                                      format(cfg['MONGO_SETTINGS']['host'],
+                                             cfg['MONGO_SETTINGS']['port'],
+                                             cfg['MONGO_SETTINGS']['db'],
+                                             cfg['MONGO_SETTINGS']['user'],
+                                             cfg['MONGO_SETTINGS']['passwd']),
+                                             cfg['MONGO_SETTINGS']['replset'])
 
-    config['mongo'] = mongo
-    MONGO_SETTINGS['mongo'] = mongo
+    config['mongo'] = cfg['MONGO_SETTINGS']
+    config['mongo_db'] = mongo
+    config['sync_table'] = ['{}.{}'.format(cfg['MONGO_SETTINGS'].get('db_name'),t) for t in cfg['MONGO_SETTINGS'].get('tab_name').split(',')]
     return config
 
 
@@ -248,121 +272,262 @@ def get_config():
     功能：同步所有库数据
 '''
 def full_sync(config):
-    # 获取mongo游标对象
-    cr = config['mongo']['oplog.rs']
-    first = next(cr.find().sort('$natural', pymongo.DESCENDING).limit(-1))
-    ts = first['ts']
+    if (config['mongo']['db_name'] == '' or config['mongo']['db_name'] is None) \
+            and (config['mongo']['tab_name'] == '' or config['mongo']['tab_name'] is None):
+       pass
 
-    # 以自然排序方式遍历oplog日志，处理oplog日志类型(op:i,u,d)
-    while True:
-        cursor = cr.find({'ts': {'$gt': ts}}, cursor_type=CursorType.TAILABLE_AWAIT, oplog_replay=True)
-        while cursor.alive:
-            for doc in cursor:
-                ts = doc['ts']
-                v_json = {}
-                if MONGO_SETTINGS['db_name'] == '' or MONGO_SETTINGS['db_name'] is None:
-                    write_log(doc)
-                    if doc['op'] == 'i':
-                        v_json['op'] = 'insert'
-                        v_json['obj'] = doc['ns']
-                        v_json['val'] = doc['o']
-                        v_json['val']['_id'] = str(v_json['val']['_id'])
-                        config['producer'].sendjsondata(v_json)
-                    elif doc['op'] == 'd':
-                        v_json['op'] = 'delete'
-                        v_json['obj'] = doc['ns']
-                        v_json['val'] = str(doc['o']['_id'])
-                        config['producer'].sendjsondata(v_json)
-                    elif doc['op'] == 'u':
-                        v_json['op'] = 'update'
-                        v_json['obj'] = doc['ns']
-                        v_json['val'] = doc['o']['$set']
-                        v_json['where'] = doc['o2']
-                        v_json['where']['_id'] = str(v_json['where']['_id'])
-                        config['producer'].sendjsondata(v_json)
-                    else:
-                        pass
+    if config['mongo']['db_name'] is not None and config['mongo']['tab_name'] is not None :
+       for i in config['sync_table']:
+          print('full sync :{}...'.format(i))
+          db = get_ds_mongo_auth_db('{0}:{1}:{2}:{3}:{4}'.
+                                 format(config['mongo']['host'],
+                                        config['mongo']['port'],
+                                        config['mongo']['db'],
+                                        config['mongo']['user'],
+                                        config['mongo']['passwd']),
+                                        i.split('.')[0])
+          tab = i.split('.')[1]
+          cr = db[tab]
+          rs = cr.find({})
+          counter = 1
+          batch = []
+          for e in rs:
+             # v_json = {}
+             # v_json['op'] = 'insert'
+             # v_json['obj'] = i
+             # v_json['val'] = e
+             # v_json['val']['_id'] = str(v_json['val']['_id'])
+             e['_id'] = str(e['_id'])
+             batch.append(e)
+             if counter % config['sync_settings']['batch'] == 0:
+                v_json = KAFKA_INSERT_TEMPLETE
+                v_json['data'] = batch
+                v_json['database'] = config['mongo']['db_name']
+                v_json['table'] = i.split('.')[1]
+                v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                config['producer'].sendjsondata(v_json)
+                v_json = json.dumps(v_json,
+                                   cls=DateEncoder,
+                                   ensure_ascii=False,
+                                   indent=4,
+                                   separators=(',', ':')) + '\n'
+                if config['sync_settings']['debug'] == 'Y':
+                   print(v_json)
+                   logging.info(v_json)
+                batch = []
+             counter+=1
+
+          # write last batch
+          v_json = KAFKA_INSERT_TEMPLETE
+          v_json['data'] = batch
+          v_json['database'] = config['mongo']['db_name']
+          v_json['table'] = i.split('.')[1]
+          v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+          config['producer'].sendjsondata(json.dumps(v_json,cls=DateEncoder))
+          v_json = json.dumps(v_json,
+                              cls=DateEncoder,
+                              ensure_ascii=False,
+                              indent=4,
+                              separators=(',', ':')) + '\n'
+          if config['sync_settings']['debug'] == 'Y':
+              print(v_json)
 
 
-'''
-    功能：同步某个库中某张表数据
-'''
 def incr_sync(config):
-    # 获取mongo游标对象
-    cr = config['mongo']['oplog.rs']
+    cr = config['mongo_db']['oplog.rs']
     first = next(cr.find().sort('$natural', pymongo.DESCENDING).limit(-1))
     ts = first['ts']
-
-    # 以自然排序方式遍历oplog日志，处理oplog日志类型(op:i,u,d)
-    while True:
-        cursor = cr.find({'ts': {'$gt': ts}}, cursor_type=CursorType.TAILABLE_AWAIT, oplog_replay=True)
-        while cursor.alive:
-            for doc in cursor:
-                ts = doc['ts']
-                v_json = {}
-                if "{0}.{1}".format(MONGO_SETTINGS['db_name'], MONGO_SETTINGS['tab_name']) in doc['ns']:
+    print('insr sync:',config['sync_table'])
+    cursor = cr.find({'ts': {'$gt': ts}}, cursor_type=CursorType.TAILABLE_AWAIT, oplog_replay=True)
+    while cursor.alive:
+        for doc in cursor:
+            ts = doc['ts']
+            db = doc['ns'].split('.')[0]
+            if config['mongo']['db_name'] == db and  config['mongo']['tab_name'] is not None:
+                if doc['ns'] in config['sync_table']:
                     write_log(doc)
                     if doc['op'] == 'i':
-                        v_json['op'] = 'insert'
-                        v_json['obj'] = doc['ns']
-                        v_json['val'] = doc['o']
-                        v_json['val']['_id'] = str(v_json['val']['_id'])
+                        # v_json['op'] = 'insert'
+                        # v_json['obj'] = doc['ns']
+                        # v_json['val'] = doc['o']
+                        # v_json['val']['_id'] = str(v_json['val']['_id'])
+                        if config['sync_settings']['debug'] == 'Y':
+                           print('insert doc=', doc)
+                        v_json = KAFKA_INSERT_TEMPLETE
+                        doc['o']['_id'] = str(doc['o']['_id'] )
+                        v_json['data'] = [doc['o']]
+                        v_json['database'] = doc['ns'].split('.')[0]
+                        v_json['table'] = doc['ns'].split('.')[1]
+                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
                         config['producer'].sendjsondata(v_json)
-                    elif doc['op'] == 'd':
-                        v_json['op'] = 'delete'
-                        v_json['obj'] = doc['ns']
-                        v_json['val'] = str(doc['o']['_id'])
-                        config['producer'].sendjsondata(v_json)
-                    elif doc['op'] == 'u':
-                        v_json['op'] = 'update'
-                        v_json['obj'] = doc['ns']
-                        if doc['o'].get('$set', None) is not None:
-                            v_json['val'] = doc['o']['$set']
-                        else:
-                            v_json['val'] = doc['o']
-                            v_json['val']['_id'] = str(v_json['val']['_id'])
-                        v_json['where'] = doc['o2']
-                        v_json['where']['_id'] = str(v_json['where']['_id'])
-                        config['producer'].sendjsondata(v_json)
-                    else:
-                        pass
+                        v_json = json.dumps(v_json,
+                                            cls=DateEncoder,
+                                            ensure_ascii=False,
+                                            indent=4,
+                                            separators=(',', ':')) + '\n'
+                        if config['sync_settings']['debug'] == 'Y':
+                            print(v_json)
+                            logging.info(v_json)
 
-'''
-    功能：打印配置
-'''
-def print_cfg():
-    print('Mongodb config:')
-    print_dict(MONGO_SETTINGS)
-    print('Kafka config:')
-    print_dict(KAFKA_SETTINGS)
 
+                    if doc['op'] == 'd':
+                        # v_json['op'] = 'delete'
+                        # v_json['obj'] = doc['ns']
+                        # v_json['val'] = str(doc['o']['_id'])
+                        if config['sync_settings']['debug'] == 'Y':
+                           print('delete doc=', doc)
+                        v_json = KAFKA_DELETE_TEMPLETE
+                        doc['o']['_id'] = str(doc['o']['_id'])
+                        v_json['data'] = [doc['o']]
+                        v_json['database'] = doc['ns'].split('.')[0]
+                        v_json['table'] = doc['ns'].split('.')[1]
+                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                        config['producer'].sendjsondata(v_json)
+                        v_json = json.dumps(v_json,
+                                            cls=DateEncoder,
+                                            ensure_ascii=False,
+                                            indent=4,
+                                            separators=(',', ':')) + '\n'
+                        if config['sync_settings']['debug'] == 'Y':
+                            print(v_json)
+                            logging.info(v_json)
+
+
+                    if doc['op'] == 'u':
+                        # v_json['op'] = 'update'
+                        # v_json['obj'] = doc['ns']
+                        # if doc['o'].get('$set', None) is not None:
+                        #     v_json['val'] = doc['o']['$set']
+                        # else:
+                        #     v_json['val'] = doc['o']
+                        #     v_json['val']['_id'] = str(v_json['val']['_id'])
+                        # v_json['where'] = doc['o2']
+                        # v_json['where']['_id'] = str(v_json['where']['_id'])
+                        if config['sync_settings']['debug'] == 'Y':
+                           print('update doc=', doc)
+                        v_json = KAFKA_UPDATE_TEMPLETE
+
+                        v_json['data'] = [doc['o']['$set']] if doc['o'].get('$set', None) is not None else [doc['o']]
+                        if v_json['data'][0].get('_id'):
+                           v_json['data'][0]['_id'] = str(v_json['data'][0]['_id'])
+                        v_json['database'] = doc['ns'].split('.')[0]
+                        v_json['table'] = doc['ns'].split('.')[1]
+                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                        config['producer'].sendjsondata(v_json)
+                        v_json = json.dumps(v_json,
+                                            cls=DateEncoder,
+                                            ensure_ascii=False,
+                                            indent=4,
+                                            separators=(',', ':')) + '\n'
+                        if config['sync_settings']['debug'] == 'Y':
+                            print(v_json)
+                            logging.info(v_json)
+
+
+            if (config['mongo']['db_name']  is  None or config['mongo']['db_name'] =='') \
+                    and (config['mongo']['tab_name'] is None or  config['mongo']['tab_name'] =='') :
+                write_log(doc)
+                if doc['op'] == 'i':
+                    # v_json['op'] = 'insert'
+                    # v_json['obj'] = doc['ns']
+                    # v_json['val'] = doc['o']
+                    # v_json['val']['_id'] = str(v_json['val']['_id'])
+                    # config['producer'].sendjsondata(v_json)
+                    if config['sync_settings']['debug'] == 'Y':
+                        print('insert doc=', doc)
+                    v_json = KAFKA_INSERT_TEMPLETE
+                    doc['o']['_id'] = str(doc['o']['_id'])
+                    v_json['data'] = doc['o']
+                    v_json['database'] = doc['ns'].split('.')[0]
+                    v_json['table'] = doc['ns'].split('.')[1]
+                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                    config['producer'].sendjsondata(v_json)
+                    v_json = json.dumps(v_json,
+                                        cls=DateEncoder,
+                                        ensure_ascii=False,
+                                        indent=4,
+                                        separators=(',', ':')) + '\n'
+                    if config['sync_settings']['debug'] == 'Y':
+                        print(v_json)
+                        logging.info(v_json)
+
+
+                if doc['op'] == 'd':
+                    if config['sync_settings']['debug'] == 'Y':
+                        print('delete doc=', doc)
+                    v_json = KAFKA_DELETE_TEMPLETE
+                    v_json['data'] = doc['o']
+                    v_json['database'] = doc['ns'].split('.')[0]
+                    v_json['table'] = doc['ns'].split('.')[1]
+                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                    config['producer'].sendjsondata(v_json)
+                    v_json = json.dumps(v_json,
+                                        cls=DateEncoder,
+                                        ensure_ascii=False,
+                                        indent=4,
+                                        separators=(',', ':')) + '\n'
+                    if config['sync_settings']['debug'] == 'Y':
+                        print(v_json)
+                        logging.info(v_json)
+
+                if doc['op'] == 'u':
+                    if config['sync_settings']['debug'] == 'Y':
+                        print('update doc=', doc)
+                    v_json = KAFKA_UPDATE_TEMPLETE
+                    v_json['data'] = doc['o']['$set'] if doc['o'].get('$set', None) is not None else doc['o']
+                    v_json['old'] = doc['o2']
+                    v_json['database'] = doc['ns'].split('.')[0]
+                    v_json['table'] = doc['ns'].split('.')[1]
+                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                    config['producer'].sendjsondata(v_json)
+                    v_json = json.dumps(v_json,
+                                        cls=DateEncoder,
+                                        ensure_ascii=False,
+                                        indent=4,
+                                        separators=(',', ':')) + '\n'
+                    if config['sync_settings']['debug'] == 'Y':
+                        print(v_json)
+                        logging.info(v_json)
 
 def init_log(config):
-    os.system('>{}'.format(MONGO_SETTINGS['logfile']))
+    os.system('>{}'.format(config['mongo']['logfile']))
+
+def parse_param():
+    parser = argparse.ArgumentParser(description='Resolve mysql binlogfile.')
+    parser.add_argument('--conf', help='配置文件', default=None, required=True)
+    args = parser.parse_args()
+    return args
 
 '''
     功能：主函数   
 '''
 def main():
+   # read config
+   args = parse_param()
+   cfg = read_json(args.conf)
 
-   if not MONGO_SETTINGS['isSync']:
+   if not cfg['SYNC_SETTINGS']['isSync']:
       print('Sync is disabled!' )
       sys.exit(0)
 
-   # 获取mongo,es连接对象
-   config = get_config()
+   # init config
+   config = get_config(cfg)
 
-   # 输出配置
-   print_cfg()
+   # init logger
+   logging.basicConfig(
+       filename='{}.{}.log'.format(config['sync_settings']['logfile'], datetime.datetime.now().strftime("%Y-%m-%d")),
+       format='[%(asctime)s-%(levelname)s:%(message)s]',
+       level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S')
 
-   # 初始化日志
-   init_log(config)
+   # print config
+   print_cfg(config)
 
-   # 数据同步
-   if MONGO_SETTINGS['db_name'] == '' or MONGO_SETTINGS['db_name'] is None:
-       full_sync(config)
-   else:
-       incr_sync(config)
+   # full sync
+   if config['sync_settings']['isInit']:
+      full_sync(config)
+
+   # incr sync
+   incr_sync(config)
 
 if __name__ == "__main__":
      main()
