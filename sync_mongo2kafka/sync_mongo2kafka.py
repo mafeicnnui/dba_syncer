@@ -21,60 +21,6 @@ from kafka  import KafkaProducer
 from kafka.errors import KafkaError
 
 '''
-  1.初始全量同步：表加锁+全量初始化+释放锁+增量同步
-  2.增量同步成功后增量检查点至文件中
-  3.每次启动都会进行全量同步，数据会重复
-  4.根据袁林提供的模板写消息DML
-  5.增加开关是否写DDL事件
-  6.KAFKA报错:Failed to update metadata after 60.0 secs.
-  7.全量同步开始记录ts,全量同步后增量同步从大于等于ts开始同步
-  
-'''
-
-# KAFKA_INSERT_TEMPLETE = {
-#     "data":[],
-#     "database":"",
-#     "isDdl":False,
-#     "old":None,
-#     "pkNames":[
-#         "_id"
-#     ],
-#     "sql":"",
-#     "table":"",
-#     "ts":0,
-#     "type":"INSERT"
-# }
-#
-# KAFKA_DELETE_TEMPLETE = {
-#     "data":[],
-#     "database":"",
-#     "isDdl":False,
-#     "old":None,
-#     "pkNames":[
-#         "_id"
-#     ],
-#     "sql":"",
-#     "table":"",
-#     "ts":0,
-#     "type":"DELETE"
-# }
-#
-# KAFKA_UPDATE_TEMPLETE = {
-#     "data":[],
-#     "database":"",
-#     "isDdl":False,
-#     "old":None,
-#     "pkNames":[
-#         "_id"
-#     ],
-#     "sql":"",
-#     "table":"",
-#     "ts":0,
-#     "type":""
-# }
-
-
-'''
     功能：读json配置文件转为dict
 '''
 def read_json(file):
