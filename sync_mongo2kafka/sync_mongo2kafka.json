@@ -4,7 +4,8 @@
         "isInit"   : true,
         "logfile"  : "sync_mongo2kafka.log",
         "batch"    : 5,
-        "debug"    : "Y"
+        "debug"    : "Y",
+        "sync_gap" : 3
    },
    "MONGO_SETTINGS" : {
         "host"     : "140.143.229.98",

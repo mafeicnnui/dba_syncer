@@ -295,15 +295,20 @@ def full_sync(config):
                 msg['dataType'] = 'FULL'
                 msg['table'] = i.split('.')[1]
                 msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                msg['type'] = 'INSERT'
                 config['producer'].sendjsondata(msg)
-                v_json = json.dumps(msg,
-                                   cls=DateEncoder,
-                                   ensure_ascii=False,
-                                   indent=4,
-                                   separators=(',', ':')) + '\n'
+                if config['sync_settings']['sync_gap']>0:
+                   print('full sync sleep {}s',format(config['sync_settings']['sync_gap']))
+                   time.sleep(config['sync_settings']['sync_gap'])
+
+                out = json.dumps(msg,
+                                 cls=DateEncoder,
+                                 ensure_ascii=False,
+                                 indent=4,
+                                 separators=(',', ':')) + '\n'
                 if config['sync_settings']['debug'] == 'Y':
-                   print(v_json)
-                   logging.info(v_json)
+                   print(out)
+                   logging.info(out)
                 batch = []
              counter+=1
 
@@ -314,14 +319,16 @@ def full_sync(config):
           msg['dataType'] = 'FULL'
           msg['table'] = i.split('.')[1]
           msg['ts'] = int( round(time.time() * 1000))
-          config['producer'].sendjsondata(json.dumps(v_json,cls=DateEncoder))
-          v_json = json.dumps(msg,
+          msg['type'] = 'INSERT'
+          config['producer'].sendjsondata(msg)
+          out = json.dumps(msg,
                               cls=DateEncoder,
                               ensure_ascii=False,
                               indent=4,
                               separators=(',', ':')) + '\n'
           if config['sync_settings']['debug'] == 'Y':
-              print(v_json)
+             print(out)
+             logging.info(out)
 
 def incr_sync(config):
     cr = config['mongo_db']['oplog.rs']
