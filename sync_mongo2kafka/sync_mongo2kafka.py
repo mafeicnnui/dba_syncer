@@ -298,7 +298,7 @@ def full_sync(config):
                 msg['type'] = 'INSERT'
                 config['producer'].sendjsondata(msg)
                 if config['sync_settings']['sync_gap']>0:
-                   print('full sync sleep {}s',format(config['sync_settings']['sync_gap']))
+                   logging.info('full sync sleep {}s',format(config['sync_settings']['sync_gap']))
                    time.sleep(config['sync_settings']['sync_gap'])
 
                 out = json.dumps(msg,
@@ -307,7 +307,6 @@ def full_sync(config):
                                  indent=4,
                                  separators=(',', ':')) + '\n'
                 if config['sync_settings']['debug'] == 'Y':
-                   print(out)
                    logging.info(out)
                 batch = []
              counter+=1
@@ -327,7 +326,6 @@ def full_sync(config):
                               indent=4,
                               separators=(',', ':')) + '\n'
           if config['sync_settings']['debug'] == 'Y':
-             print(out)
              logging.info(out)
 
 def incr_sync(config):
@@ -364,7 +362,6 @@ def incr_sync(config):
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
                             print('doc=', doc)
-                            print('json=',out)
                             logging.info(out)
 
                     if doc['op'] == 'd':
@@ -384,7 +381,6 @@ def incr_sync(config):
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
                             print('doc=', doc)
-                            print('json=',out)
                             logging.info(out)
 
                     if doc['op'] == 'u':
@@ -405,7 +401,6 @@ def incr_sync(config):
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
                             print('doc=',doc)
-                            print('json=',out)
                             logging.info(out)
 
 
@@ -428,7 +423,6 @@ def incr_sync(config):
                                         separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
                         print('doc=',doc)
-                        print('json=',out)
                         logging.info(out)
 
 
@@ -447,7 +441,6 @@ def incr_sync(config):
                                         separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
                         print('doc=',doc)
-                        print('json=',out)
                         logging.info(out)
 
                 if doc['op'] == 'u':
@@ -459,14 +452,13 @@ def incr_sync(config):
                     msg['ts'] = int( round(time.time() * 1000))
                     config['producer'].sendjsondata(msg)
                     write_ckpt(config)
-                    out = json.dumps(v_json,
-                                        cls=DateEncoder,
-                                        ensure_ascii=False,
-                                        indent=4,
-                                        separators=(',', ':')) + '\n'
+                    out = json.dumps(msg,
+                                     cls=DateEncoder,
+                                     ensure_ascii=False,
+                                     indent=4,
+                                     separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
                         print('doc=', doc)
-                        print('json=',out)
                         logging.info(out)
 
 def init_log(config):
@@ -503,14 +495,14 @@ def main():
       print('Sync is disabled!' )
       sys.exit(0)
 
-   # init config
-   config = get_config(cfg)
-
    # init logger
    logging.basicConfig(
-       filename='{}.{}.log'.format(config['sync_settings']['logfile'], datetime.datetime.now().strftime("%Y-%m-%d")),
+       filename=cfg['SYNC_SETTINGS']['logfile'],
        format='[%(asctime)s-%(levelname)s:%(message)s]',
        level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S')
+
+   # init config
+   config = get_config(cfg)
 
    # print config
    print_cfg(config)

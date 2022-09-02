@@ -235,12 +235,17 @@ def diff_sync(cfg):
                                    "_source": event,
                                }
                             else:
-                               print('Not support level!')
+                               logging.info('Not support level!')
                                sys.exit(0)
 
-                            print('insert',json.dumps(es_doc, cls=DateEncoder, ensure_ascii=False, indent=4,separators=(',', ':')) + '\n')
                             helpers.bulk(cfg['es'], [es_doc])
                             write_ckpt(cfg)
+                            if cfg['sync_settings']['debug'] == 'Y':
+                                logging.info('insert:'+json.dumps(es_doc,
+                                                                   cls=DateEncoder,
+                                                                   ensure_ascii=False,
+                                                                   indent=4,
+                                                                   separators=(',', ':')) + '\n')
                         elif isinstance(binlogevent, UpdateRowsEvent):
                             event["action"] = "update"
                             if cfg['sync_settings']['level'] == '1':
@@ -259,13 +264,18 @@ def diff_sync(cfg):
                                     "_source": event,
                                 }
                             else:
-                                print('Not support level!')
+                                logging.info('Not support level!')
                                 sys.exit(0)
 
-                            print('update:',json.dumps(es_doc, cls=DateEncoder, ensure_ascii=False, indent=4,separators=(',', ':')) + '\n')
                             try:
                                cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":event})
                                write_ckpt(cfg)
+                               if cfg['sync_settings']['debug'] == 'Y':
+                                   logging.info('update:'+json.dumps(es_doc,
+                                                                      cls=DateEncoder,
+                                                                      ensure_ascii=False,
+                                                                      indent=4,
+                                                                      separators=(',', ':')) + '\n')
                             except:
                                print('Doc not found,update failure!')
                         elif isinstance(binlogevent, DeleteRowsEvent):
@@ -275,19 +285,20 @@ def diff_sync(cfg):
                             elif cfg['sync_settings']['level'] == '2':
                                 id = int(row["values"][event['pk_name']])
                             else:
-                                print('Not support level!')
+                                logging.info('Not support level!')
                                 sys.exit(0)
 
                             event[cfg['sync_settings']['table']] = row["values"]
                             delete_by_id = {
                                 "query": {"match":{"_id":id }}
                             }
-                            print('delete:'.format(event['table'],delete_by_id))
                             try:
                                cfg['es'].delete_by_query(index=cfg['es_settings']['index'],body=delete_by_id,doc_type='_doc')
                                write_ckpt(cfg)
+                               if cfg['sync_settings']['debug'] == 'Y':
+                                   logging.info('delete table:{},id:{}'.format(event['table'], delete_by_id))
                             except:
-                               print('Doc not found,delete failure!')
+                               logging.info('Doc not found,delete failure!')
 
             if stream.log_file == cfg['full_binlog_file'] and (
                     stream.log_pos + 31 == int(cfg['full_binlog_pos']) or stream.log_pos >= int(
@@ -296,7 +307,7 @@ def diff_sync(cfg):
                 break
 
     except Exception as e:
-        traceback.print_exc()
+        logging.info(traceback.print_exc())
 
 def incr_sync(cfg):
     try:
@@ -354,10 +365,15 @@ def incr_sync(cfg):
                                    "_source": event,
                                }
                             else:
-                               print('Not support level!')
+                               logging.info('Not support level!')
                                sys.exit(0)
 
-                            print('insert',json.dumps(es_doc, cls=DateEncoder, ensure_ascii=False, indent=4,separators=(',', ':')) + '\n')
+                            if cfg['sync_settings']['debug'] == 'Y':
+                                logging.info('insert:'+json.dumps(es_doc,
+                                                                   cls=DateEncoder,
+                                                                   ensure_ascii=False,
+                                                                   indent=4,
+                                                                   separators=(',', ':')) + '\n')
                             helpers.bulk(cfg['es'], [es_doc])
                             write_ckpt(cfg)
                         elif isinstance(binlogevent, UpdateRowsEvent):
@@ -378,19 +394,24 @@ def incr_sync(cfg):
                                     "_source": event,
                                 }
                             else:
-                                print('Not support level!')
+                                logging.info('Not support level!')
                                 sys.exit(0)
 
-                            print('update:',json.dumps(es_doc, cls=DateEncoder, ensure_ascii=False, indent=4,separators=(',', ':')) + '\n')
                             try:
                                if cfg['sync_settings']['level'] == '1':
                                   cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":row["after_values"]})
                                if cfg['sync_settings']['level'] == '2':
                                   cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":event})
                                write_ckpt(cfg)
+                               if cfg['sync_settings']['debug'] == 'Y':
+                                  logging.info('update:'+json.dumps(es_doc,
+                                                              cls=DateEncoder,
+                                                              ensure_ascii=False,
+                                                              indent=4,
+                                                              separators=(',', ':')) + '\n')
+
                             except:
-                               traceback.print_exc()
-                               print('Doc not found,update failure!')
+                               logging.info(traceback.format_exc())
 
                         elif isinstance(binlogevent, DeleteRowsEvent):
                             event["action"] = "delete"
@@ -401,17 +422,17 @@ def incr_sync(cfg):
                             else:
                                 print('Not support level!')
                                 sys.exit(0)
-
                             event[cfg['sync_settings']['table']] = row["values"]
                             delete_by_id = {
                                 "query": {"match":{"_id":id }}
                             }
-                            print('delete:'.format(event['table'],delete_by_id))
                             try:
                                cfg['es'].delete_by_query(index=cfg['es_settings']['index'],body=delete_by_id,doc_type='_doc')
                                write_ckpt(cfg)
+                               if cfg['sync_settings']['debug'] == 'Y':
+                                   logging.info('delete table:{},id:{}'.format(event['table'], delete_by_id))
                             except:
-                               print('Doc not found,delete failure!')
+                               logging.info(traceback.format_exc())
 
 
     except Exception as e:
@@ -439,7 +460,8 @@ def full_sync(cfg):
         while n_tab_total_rows > 0:
             st = "select {} from `{}`.`{}` where {} between {} and {}" \
                 .format(v_sync_table_cols, event['schema'],event['table'], v_pk_col_name, str(n_row),str(n_row + n_batch_size))
-            logging.info('v1:'+st)
+            if cfg['sync_settings']['debug'] == 'Y':
+               logging.info('sql:'+st)
             cr.execute(st)
             rs = cr.fetchall()
             batch = []
@@ -453,6 +475,12 @@ def full_sync(cfg):
                    batch.append(doc)
             if len(batch) >0:
                helpers.bulk(cfg['es'], batch)
+               if cfg['sync_settings']['debug'] == 'Y':
+                  logging.info(json.dumps(batch,
+                                          cls=DateEncoder,
+                                          ensure_ascii=False,
+                                          indent=4,
+                                          separators=(',', ':')) + '\n')
                logging.info('full sync es {} records!'.format(len(batch)))
             i_counter = i_counter + len(rs)
             n_row = n_row + n_batch_size + 1
@@ -564,14 +592,14 @@ def main():
         print('Sync is disabled!')
         sys.exit(0)
 
-    # init config
-    config = get_config(cfg)
-
     # init logger
     logging.basicConfig(
-        filename='{}.{}.log'.format(config['sync_settings']['logfile'], datetime.datetime.now().strftime("%Y-%m-%d")),
+        filename=cfg['SYNC_SETTINGS']['logfile'],
         format='[%(asctime)s-%(levelname)s:%(message)s]',
         level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S')
+
+    # init config
+    config = get_config(cfg)
 
     # print config
     print_cfg(config)

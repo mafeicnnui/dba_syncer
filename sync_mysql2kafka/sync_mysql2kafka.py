@@ -265,14 +265,13 @@ def full_sync(cfg):
                     msg['table'] = event['table']
                     msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
                     msg['type'] = 'INSERT'
-                    v_json = json.dumps(msg,
+                    out = json.dumps(msg,
                                         cls=DateEncoder,
                                         ensure_ascii=False,
                                         indent=4,
                                         separators=(',', ':')) + '\n'
                     if cfg['sync_settings']['debug'] == 'Y':
-                        print(v_json)
-                        logging.info(v_json)
+                        logging.info(out)
                     producer.sendjsondata(msg)
 
                 i_counter = i_counter + len(rs)
@@ -417,7 +416,6 @@ def incr_sync(cfg):
                     if event['schema'] == schema:
                         producer.sendjsondata(event)
                         if cfg['sync_settings']['debug'] == 'Y':
-                            print(event)
                             logging.info(json.dumps(event,
                                                     cls=DateEncoder,
                                                     ensure_ascii=False,
@@ -429,7 +427,6 @@ def incr_sync(cfg):
                     event = {"schema": binlogevent.schema, "table": binlogevent.table}
                     if event['schema'] == schema:
                         if cfg['sync_settings']['debug'] == 'Y':
-                            print(event)
                             logging.info(json.dumps(event,
                                                     cls=DateEncoder,
                                                     ensure_ascii=False,
@@ -451,11 +448,6 @@ def incr_sync(cfg):
                                                             ensure_ascii=False,
                                                             indent=4,
                                                             separators=(',', ':')) + '\n')
-                                    print(json.dumps(msg,
-                                                     cls=DateEncoder,
-                                                     ensure_ascii=False,
-                                                     indent=4,
-                                                     separators=(',', ':')) + '\n')
                                 producer.sendjsondata(msg)
                                 write_ckpt(cfg)
                             elif isinstance(binlogevent, UpdateRowsEvent):
@@ -473,11 +465,6 @@ def incr_sync(cfg):
                                                             ensure_ascii=False,
                                                             indent=4,
                                                             separators=(',', ':')) + '\n')
-                                    print(json.dumps(msg,
-                                                     cls=DateEncoder,
-                                                     ensure_ascii=False,
-                                                     indent=4,
-                                                     separators=(',', ':')) + '\n')
                                 producer.sendjsondata(msg)
                                 write_ckpt(cfg)
                             elif isinstance(binlogevent, DeleteRowsEvent):
@@ -489,11 +476,6 @@ def incr_sync(cfg):
                                 msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
                                 msg['type'] = 'DELETE'
                                 if cfg['sync_settings']['debug'] == 'Y':
-                                    print(json.dumps(msg,
-                                                            cls=DateEncoder,
-                                                            ensure_ascii=False,
-                                                            indent=4,
-                                                            separators=(',', ':')) + '\n')
                                     logging.info(json.dumps(msg,
                                                             cls=DateEncoder,
                                                             ensure_ascii=False,
@@ -556,14 +538,14 @@ def main():
       print('Sync is disabled!' )
       sys.exit(0)
 
-   # init config
-   config = get_config(cfg)
-
-   # init logger
+      # init logger
    logging.basicConfig(
-       filename='{}.{}.log'.format(config['sync_settings']['logfile'], datetime.datetime.now().strftime("%Y-%m-%d")),
+       filename=cfg['SYNC_SETTINGS']['logfile'],
        format='[%(asctime)s-%(levelname)s:%(message)s]',
        level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S')
+
+   # init config
+   config = get_config(cfg)
 
    # print config
    print_cfg(config)
