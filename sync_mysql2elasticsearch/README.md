@@ -4,7 +4,7 @@
 ------------
 
 
-   功能：MySQL向ElasticSearch数据同步工具。基于PYTHON3.6语言开发，支持MySQL5.6,MySQL5.7,TDSQL-MySQL-C 表实时同步至ElasticSearch中，通过解析oplog实现。
+   功能：MySQL向ElasticSearch数据同步工具。基于PYTHON3.6语言开发，支持MySQL5.6,MySQL5.7,TDSQL-MySQL-C 表实时同步至ElasticSearch中，通过解析binlog实现。
 
    1.1 安装python3.6
 

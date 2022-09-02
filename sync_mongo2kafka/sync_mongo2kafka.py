@@ -12,8 +12,10 @@ import datetime
 import sys,os
 import logging
 import argparse
+import warnings
 from uuid import UUID
 from bson.objectid import ObjectId
+from bson.timestamp import Timestamp
 from pymongo.cursor import CursorType
 from kafka  import KafkaProducer
 from kafka.errors import KafkaError
@@ -29,47 +31,47 @@ from kafka.errors import KafkaError
   
 '''
 
-KAFKA_INSERT_TEMPLETE = {
-    "data":[],
-    "database":"",
-    "isDdl":False,
-    "old":None,
-    "pkNames":[
-        "_id"
-    ],
-    "sql":"",
-    "table":"",
-    "ts":0,
-    "type":"INSERT"
-}
-
-KAFKA_DELETE_TEMPLETE = {
-    "data":[],
-    "database":"",
-    "isDdl":False,
-    "old":None,
-    "pkNames":[
-        "_id"
-    ],
-    "sql":"",
-    "table":"",
-    "ts":0,
-    "type":"DELETE"
-}
-
-KAFKA_UPDATE_TEMPLETE = {
-    "data":[],
-    "database":"",
-    "isDdl":False,
-    "old":None,
-    "pkNames":[
-        "_id"
-    ],
-    "sql":"",
-    "table":"",
-    "ts":0,
-    "type":"UPDATE"
-}
+# KAFKA_INSERT_TEMPLETE = {
+#     "data":[],
+#     "database":"",
+#     "isDdl":False,
+#     "old":None,
+#     "pkNames":[
+#         "_id"
+#     ],
+#     "sql":"",
+#     "table":"",
+#     "ts":0,
+#     "type":"INSERT"
+# }
+#
+# KAFKA_DELETE_TEMPLETE = {
+#     "data":[],
+#     "database":"",
+#     "isDdl":False,
+#     "old":None,
+#     "pkNames":[
+#         "_id"
+#     ],
+#     "sql":"",
+#     "table":"",
+#     "ts":0,
+#     "type":"DELETE"
+# }
+#
+# KAFKA_UPDATE_TEMPLETE = {
+#     "data":[],
+#     "database":"",
+#     "isDdl":False,
+#     "old":None,
+#     "pkNames":[
+#         "_id"
+#     ],
+#     "sql":"",
+#     "table":"",
+#     "ts":0,
+#     "type":""
+# }
 
 
 '''
@@ -78,6 +80,8 @@ KAFKA_UPDATE_TEMPLETE = {
 def read_json(file):
     with open(file, 'r') as f:
          cfg = json.loads(f.read())
+    cfg['cfg_file'] = file
+    cfg['ckpt_file'] = file.replace('json', 'ckpt')
     return cfg
 
 
@@ -220,7 +224,6 @@ def is_valid_datetime(strdate):
     else:
         return False
 
-
 '''
     功能：写日志 
 '''
@@ -236,11 +239,45 @@ def write_log(doc):
     doc=preprocessor(doc)
     logging.info(json.dumps(doc, cls=DateEncoder,ensure_ascii=False, indent=4, separators=(',', ':'))+'\n')
 
+def write_ckpt(cfg):
+    ck = {
+       'ts': {
+         "time" : cfg['ts'].time,
+         "inc" : cfg['ts'].inc
+        },
+       'pid':os.getpid()
+    }
+    with open(cfg['ckpt_file'], 'w') as f:
+        f.write(json.dumps(ck, ensure_ascii=False, indent=4, separators=(',', ':')))
+    print('update checkpoint:{}'.format(cfg['ts']))
+    logging.info('update checkpoint:{}'.format(cfg['ts']))
+
+def check_ckpt(cfg):
+    return os.path.isfile(cfg['ckpt_file'])
+
+def read_ckpt(cfg):
+    with open(cfg['ckpt_file'], 'r') as f:
+        contents = f.read()
+    if  contents == '':
+        return ''
+    else:
+        binlog = json.loads(contents)
+        return binlog
+
+def get_ts(cfg):
+    cr = cfg['mongo_db']['oplog.rs']
+    first = next(cr.find().sort('$natural', pymongo.DESCENDING).limit(-1))
+    return {'time':first['ts'].time,'inc':first['ts'].inc}
+
+def get_seconds(b):
+    a=datetime.datetime.now()
+    return int((a-b).total_seconds())
+
 '''
     功能：获取mongo,es连接对象
 '''
 def get_config(cfg):
-    config={}
+    config=cfg
     producer = Kafka_producer(cfg['KAFKA_SETTINGS']['host'].split(','), cfg['KAFKA_SETTINGS']['port'].split(','), cfg['KAFKA_SETTINGS']['topic'])
     config['producer'] = producer
     config['kafka'] = cfg['KAFKA_SETTINGS']
@@ -265,8 +302,19 @@ def get_config(cfg):
     config['mongo'] = cfg['MONGO_SETTINGS']
     config['mongo_db'] = mongo
     config['sync_table'] = ['{}.{}'.format(cfg['MONGO_SETTINGS'].get('db_name'),t) for t in cfg['MONGO_SETTINGS'].get('tab_name').split(',')]
-    return config
 
+    if check_ckpt(cfg):
+        ckpt = read_ckpt(cfg)
+        ts = ckpt['ts']
+        pid = ckpt['pid']
+    else:
+        ts = get_ts(config)
+        pid = os.getpid()
+
+    config['ts'] = ts
+    config['pid'] = pid
+    upd_ckpt(config)
+    return config
 
 '''
     功能：同步所有库数据
@@ -292,21 +340,17 @@ def full_sync(config):
           counter = 1
           batch = []
           for e in rs:
-             # v_json = {}
-             # v_json['op'] = 'insert'
-             # v_json['obj'] = i
-             # v_json['val'] = e
-             # v_json['val']['_id'] = str(v_json['val']['_id'])
              e['_id'] = str(e['_id'])
              batch.append(e)
              if counter % config['sync_settings']['batch'] == 0:
-                v_json = KAFKA_INSERT_TEMPLETE
-                v_json['data'] = batch
-                v_json['database'] = config['mongo']['db_name']
-                v_json['table'] = i.split('.')[1]
-                v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                config['producer'].sendjsondata(v_json)
-                v_json = json.dumps(v_json,
+                msg = dict(config['kafka']['templete'])
+                msg['data'] = batch
+                msg['database'] = config['mongo']['db_name']
+                msg['dataType'] = 'FULL'
+                msg['table'] = i.split('.')[1]
+                msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+                config['producer'].sendjsondata(msg)
+                v_json = json.dumps(msg,
                                    cls=DateEncoder,
                                    ensure_ascii=False,
                                    indent=4,
@@ -318,13 +362,14 @@ def full_sync(config):
              counter+=1
 
           # write last batch
-          v_json = KAFKA_INSERT_TEMPLETE
-          v_json['data'] = batch
-          v_json['database'] = config['mongo']['db_name']
-          v_json['table'] = i.split('.')[1]
-          v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
+          msg = dict(config['kafka']['templete'])
+          msg['data'] = batch
+          msg['database'] = config['mongo']['db_name']
+          msg['dataType'] = 'FULL'
+          msg['table'] = i.split('.')[1]
+          msg['ts'] = int( round(time.time() * 1000))
           config['producer'].sendjsondata(json.dumps(v_json,cls=DateEncoder))
-          v_json = json.dumps(v_json,
+          v_json = json.dumps(msg,
                               cls=DateEncoder,
                               ensure_ascii=False,
                               indent=4,
@@ -332,162 +377,144 @@ def full_sync(config):
           if config['sync_settings']['debug'] == 'Y':
               print(v_json)
 
-
 def incr_sync(config):
     cr = config['mongo_db']['oplog.rs']
-    first = next(cr.find().sort('$natural', pymongo.DESCENDING).limit(-1))
-    ts = first['ts']
-    print('insr sync:',config['sync_table'])
-    cursor = cr.find({'ts': {'$gt': ts}}, cursor_type=CursorType.TAILABLE_AWAIT, oplog_replay=True)
+    ts = Timestamp(config['ts']['time'],config['ts']['inc'])
+    sync_time = datetime.datetime.now()
+    print('insr sync:', config['sync_table'],'config.ts=',config['ts'], 'timestamp=', ts)
+    cursor = cr.find({'ts': {'$gt': ts }}, cursor_type=CursorType.TAILABLE_AWAIT, oplog_replay=True)
     while cursor.alive:
         for doc in cursor:
-            ts = doc['ts']
+            config['ts']= doc['ts']
+            if get_seconds(sync_time) >= 1:
+                write_ckpt(config)
+                sync_time = datetime.datetime.now()
+
             db = doc['ns'].split('.')[0]
             if config['mongo']['db_name'] == db and  config['mongo']['tab_name'] is not None:
                 if doc['ns'] in config['sync_table']:
                     write_log(doc)
                     if doc['op'] == 'i':
-                        # v_json['op'] = 'insert'
-                        # v_json['obj'] = doc['ns']
-                        # v_json['val'] = doc['o']
-                        # v_json['val']['_id'] = str(v_json['val']['_id'])
-                        if config['sync_settings']['debug'] == 'Y':
-                           print('insert doc=', doc)
-                        v_json = KAFKA_INSERT_TEMPLETE
+                        msg = dict(config['kafka']['templete'])
                         doc['o']['_id'] = str(doc['o']['_id'] )
-                        v_json['data'] = [doc['o']]
-                        v_json['database'] = doc['ns'].split('.')[0]
-                        v_json['table'] = doc['ns'].split('.')[1]
-                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                        config['producer'].sendjsondata(v_json)
-                        v_json = json.dumps(v_json,
+                        msg['data'] = [doc['o']]
+                        msg['database'] = doc['ns'].split('.')[0]
+                        msg['table'] = doc['ns'].split('.')[1]
+                        msg['ts'] = int( round(time.time() * 1000))
+                        msg['type'] = 'INSERT'
+                        config['producer'].sendjsondata(msg)
+                        write_ckpt(config)
+                        out = json.dumps(msg,
                                             cls=DateEncoder,
                                             ensure_ascii=False,
                                             indent=4,
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
-                            print(v_json)
-                            logging.info(v_json)
-
+                            print('doc=', doc)
+                            print('json=',out)
+                            logging.info(out)
 
                     if doc['op'] == 'd':
-                        # v_json['op'] = 'delete'
-                        # v_json['obj'] = doc['ns']
-                        # v_json['val'] = str(doc['o']['_id'])
-                        if config['sync_settings']['debug'] == 'Y':
-                           print('delete doc=', doc)
-                        v_json = KAFKA_DELETE_TEMPLETE
+                        msg = dict(config['kafka']['templete'])
                         doc['o']['_id'] = str(doc['o']['_id'])
-                        v_json['data'] = [doc['o']]
-                        v_json['database'] = doc['ns'].split('.')[0]
-                        v_json['table'] = doc['ns'].split('.')[1]
-                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                        config['producer'].sendjsondata(v_json)
-                        v_json = json.dumps(v_json,
+                        msg['data'] = [doc['o']]
+                        msg['database'] = doc['ns'].split('.')[0]
+                        msg['table'] = doc['ns'].split('.')[1]
+                        msg['ts'] = int( round(time.time() * 1000))
+                        msg['type'] = 'DELETE'
+                        config['producer'].sendjsondata(msg)
+                        write_ckpt(config)
+                        out = json.dumps(msg,
                                             cls=DateEncoder,
                                             ensure_ascii=False,
                                             indent=4,
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
-                            print(v_json)
-                            logging.info(v_json)
-
+                            print('doc=', doc)
+                            print('json=',out)
+                            logging.info(out)
 
                     if doc['op'] == 'u':
-                        # v_json['op'] = 'update'
-                        # v_json['obj'] = doc['ns']
-                        # if doc['o'].get('$set', None) is not None:
-                        #     v_json['val'] = doc['o']['$set']
-                        # else:
-                        #     v_json['val'] = doc['o']
-                        #     v_json['val']['_id'] = str(v_json['val']['_id'])
-                        # v_json['where'] = doc['o2']
-                        # v_json['where']['_id'] = str(v_json['where']['_id'])
-                        if config['sync_settings']['debug'] == 'Y':
-                           print('update doc=', doc)
-                        v_json = KAFKA_UPDATE_TEMPLETE
-
-                        v_json['data'] = [doc['o']['$set']] if doc['o'].get('$set', None) is not None else [doc['o']]
-                        if v_json['data'][0].get('_id'):
-                           v_json['data'][0]['_id'] = str(v_json['data'][0]['_id'])
-                        v_json['database'] = doc['ns'].split('.')[0]
-                        v_json['table'] = doc['ns'].split('.')[1]
-                        v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                        config['producer'].sendjsondata(v_json)
-                        v_json = json.dumps(v_json,
+                        msg = dict(config['kafka']['templete'])
+                        msg['data'] = [doc['o']['$set']] if doc['o'].get('$set', None) is not None else [doc['o']]
+                        if msg['data'][0].get('_id'):
+                           msg['data'][0]['_id'] = str(msg['data'][0]['_id'])
+                        msg['database'] = doc['ns'].split('.')[0]
+                        msg['table'] = doc['ns'].split('.')[1]
+                        msg['ts'] = int( round(time.time() * 1000))
+                        msg['type'] = 'UPDATE'
+                        config['producer'].sendjsondata(msg)
+                        write_ckpt(config)
+                        out = json.dumps(msg,
                                             cls=DateEncoder,
                                             ensure_ascii=False,
                                             indent=4,
                                             separators=(',', ':')) + '\n'
                         if config['sync_settings']['debug'] == 'Y':
-                            print(v_json)
-                            logging.info(v_json)
+                            print('doc=',doc)
+                            print('json=',out)
+                            logging.info(out)
 
 
             if (config['mongo']['db_name']  is  None or config['mongo']['db_name'] =='') \
                     and (config['mongo']['tab_name'] is None or  config['mongo']['tab_name'] =='') :
                 write_log(doc)
                 if doc['op'] == 'i':
-                    # v_json['op'] = 'insert'
-                    # v_json['obj'] = doc['ns']
-                    # v_json['val'] = doc['o']
-                    # v_json['val']['_id'] = str(v_json['val']['_id'])
-                    # config['producer'].sendjsondata(v_json)
-                    if config['sync_settings']['debug'] == 'Y':
-                        print('insert doc=', doc)
-                    v_json = KAFKA_INSERT_TEMPLETE
+                    msg = dict(config['kafka']['templete'])
                     doc['o']['_id'] = str(doc['o']['_id'])
-                    v_json['data'] = doc['o']
-                    v_json['database'] = doc['ns'].split('.')[0]
-                    v_json['table'] = doc['ns'].split('.')[1]
-                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                    config['producer'].sendjsondata(v_json)
-                    v_json = json.dumps(v_json,
+                    msg['data'] = doc['o']
+                    msg['database'] = doc['ns'].split('.')[0]
+                    msg['table'] = doc['ns'].split('.')[1]
+                    msg['ts'] = int( round(time.time() * 1000))
+                    config['producer'].sendjsondata(msg)
+                    write_ckpt(config)
+                    out = json.dumps(msg,
                                         cls=DateEncoder,
                                         ensure_ascii=False,
                                         indent=4,
                                         separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
-                        print(v_json)
-                        logging.info(v_json)
+                        print('doc=',doc)
+                        print('json=',out)
+                        logging.info(out)
 
 
                 if doc['op'] == 'd':
-                    if config['sync_settings']['debug'] == 'Y':
-                        print('delete doc=', doc)
-                    v_json = KAFKA_DELETE_TEMPLETE
-                    v_json['data'] = doc['o']
-                    v_json['database'] = doc['ns'].split('.')[0]
-                    v_json['table'] = doc['ns'].split('.')[1]
-                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                    config['producer'].sendjsondata(v_json)
-                    v_json = json.dumps(v_json,
+                    msg = dict(config['kafka']['templete'])
+                    msg['data'] = doc['o']
+                    msg['database'] = doc['ns'].split('.')[0]
+                    msg['table'] = doc['ns'].split('.')[1]
+                    msg['ts'] = int( round(time.time() * 1000))
+                    config['producer'].sendjsondata(msg)
+                    write_ckpt(config)
+                    out = json.dumps(msg,
                                         cls=DateEncoder,
                                         ensure_ascii=False,
                                         indent=4,
                                         separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
-                        print(v_json)
-                        logging.info(v_json)
+                        print('doc=',doc)
+                        print('json=',out)
+                        logging.info(out)
 
                 if doc['op'] == 'u':
-                    if config['sync_settings']['debug'] == 'Y':
-                        print('update doc=', doc)
-                    v_json = KAFKA_UPDATE_TEMPLETE
-                    v_json['data'] = doc['o']['$set'] if doc['o'].get('$set', None) is not None else doc['o']
-                    v_json['old'] = doc['o2']
-                    v_json['database'] = doc['ns'].split('.')[0]
-                    v_json['table'] = doc['ns'].split('.')[1]
-                    v_json['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
-                    config['producer'].sendjsondata(v_json)
-                    v_json = json.dumps(v_json,
+                    msg = dict(config['kafka']['templete'])
+                    msg['data'] = doc['o']['$set'] if doc['o'].get('$set', None) is not None else doc['o']
+                    msg['old'] = doc['o2']
+                    msg['database'] = doc['ns'].split('.')[0]
+                    msg['table'] = doc['ns'].split('.')[1]
+                    msg['ts'] = int( round(time.time() * 1000))
+                    config['producer'].sendjsondata(msg)
+                    write_ckpt(config)
+                    out = json.dumps(v_json,
                                         cls=DateEncoder,
                                         ensure_ascii=False,
                                         indent=4,
                                         separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
-                        print(v_json)
-                        logging.info(v_json)
+                        print('doc=', doc)
+                        print('json=',out)
+                        logging.info(out)
 
 def init_log(config):
     os.system('>{}'.format(config['mongo']['logfile']))
@@ -497,6 +524,19 @@ def parse_param():
     parser.add_argument('--conf', help='配置文件', default=None, required=True)
     args = parser.parse_args()
     return args
+
+def get_time():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def upd_ckpt(cfg):
+    ckpt = {
+       'ts': cfg['ts'],
+       'pid':cfg['pid']
+    }
+    with open(cfg['ckpt_file'], 'w') as f:
+        f.write(json.dumps(ckpt,cls=DateEncoder,ensure_ascii=False, indent=4, separators=(',', ':')))
+    logging.info('update ckpt:{}'.format(cfg['ts'] ))
+    print('update ckpt:{}'.format(cfg['ts'] ))
 
 '''
     功能：主函数   
@@ -522,6 +562,10 @@ def main():
    # print config
    print_cfg(config)
 
+   # refresh pid
+   config['pid'] = os.getpid()
+   upd_ckpt(cfg)
+
    # full sync
    if config['sync_settings']['isInit']:
       full_sync(config)
@@ -530,5 +574,6 @@ def main():
    incr_sync(config)
 
 if __name__ == "__main__":
+     warnings.filterwarnings("ignore")
      main()
 

@@ -10,29 +10,15 @@ import sys
 import json
 import time
 import datetime
+import logging
 import pymysql
 import decimal
 import traceback
 import argparse
-import logging
 from kafka  import KafkaProducer
 from kafka.errors import KafkaError
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.row_event import (DeleteRowsEvent,UpdateRowsEvent,WriteRowsEvent)
-
-# MYSQL_SETTINGS = {
-#     "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
-#     "port"  : 29333,
-#     "user"  : "root",
-#     "passwd": "Dev21@block2022",
-#     "db"    : "21block"
-# }
-#
-# KAFKA_SETTINGS = {
-#     "host"  : "10.2.39.81",
-#     "port"  :  9092,
-#     "topic" : 'hst_source_tdsql_test'
-# }
 
 class DateEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -56,6 +42,8 @@ def print_dict(config):
     print('-'.ljust(125,'-'))
 
 def print_cfg(config):
+    print('sync settings:')
+    print_dict(config['sync_settings'])
     print('mysql config:')
     print_dict(config['mysql_settings'])
     print('Kafka config:')
@@ -266,13 +254,13 @@ def full_sync(cfg):
                 st = "select {} from `{}`.`{}` where {} between {} and {}" \
                     .format(v_sync_table_cols, event['schema'],event['table'], v_pk_col_name, str(n_row),str(n_row + n_batch_size))
                 logging.info('sql:'+st)
-                print('sql:'+st)
                 cr.execute(st)
                 rs = cr.fetchall()
                 if len(rs) > 0:
-                    msg = cfg['kafka']['templete']
+                    msg = dict(cfg['kafka']['templete'])
                     msg['data'] = rs
                     msg['database'] = event['schema']
+                    msg['dataType'] = 'FULL'
                     msg['pkNames'] = get_table_pk_names(cfg, event)
                     msg['table'] = event['table']
                     msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
@@ -283,15 +271,16 @@ def full_sync(cfg):
                                         indent=4,
                                         separators=(',', ':')) + '\n'
                     if cfg['sync_settings']['debug'] == 'Y':
+                        print(v_json)
                         logging.info(v_json)
                     producer.sendjsondata(msg)
+
+                i_counter = i_counter + len(rs)
                 print("Table:{0},Total rec:{1},Process rec:{2},Complete:{3}%".
                              format(tab, n_tab_total_rows, i_counter,
                                     round(i_counter / n_tab_total_rows * 100, 2)))
 
-                i_counter = i_counter + len(rs)
                 n_row = n_row + n_batch_size + 1
-                print('i_counter=',i_counter,'n_tab_total_rows=',n_tab_total_rows)
                 if i_counter >= n_tab_total_rows or n_tab_total_rows == 0:
                     break
     cfg['db_mysql_dict'].commit()
@@ -339,7 +328,7 @@ def diff_sync(cfg):
 
                         if event['schema'] == schema and event['table'] in table:
                             if  isinstance(binlogevent, WriteRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["values"]]
                                 msg['database'] = event['schema']
                                 msg['pkNames'] = get_table_pk_names(cfg,event)
@@ -349,14 +338,14 @@ def diff_sync(cfg):
                                 producer.sendjsondata(msg)
                                 if cfg['sync_settings']['debug'] == 'Y':
                                     log = json.dumps(msg,
-                                                        cls=DateEncoder,
-                                                        ensure_ascii=False,
-                                                        indent=4,
-                                                        separators=(',', ':')) + '\n'
+                                                     cls=DateEncoder,
+                                                     ensure_ascii=False,
+                                                     indent=4,
+                                                     separators=(',', ':')) + '\n'
                                     logging.info(log)
 
                             elif isinstance(binlogevent, UpdateRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["after_values"]]
                                 msg['old'] = [row["before_values"]]
                                 msg['database'] = event['schema']
@@ -373,7 +362,7 @@ def diff_sync(cfg):
                                                      separators=(',', ':')) + '\n'
                                     logging.info(log)
                             elif isinstance(binlogevent, DeleteRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["values"]]
                                 msg['database'] = event['schema']
                                 msg['pkNames'] = get_table_pk_names(cfg, event)
@@ -449,7 +438,7 @@ def incr_sync(cfg):
 
                         if event['schema'] == schema and event['table'] in table:
                             if  isinstance(binlogevent, WriteRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["values"]]
                                 msg['database'] = event['schema']
                                 msg['pkNames'] = get_table_pk_names(cfg,event)
@@ -462,10 +451,15 @@ def incr_sync(cfg):
                                                             ensure_ascii=False,
                                                             indent=4,
                                                             separators=(',', ':')) + '\n')
+                                    print(json.dumps(msg,
+                                                     cls=DateEncoder,
+                                                     ensure_ascii=False,
+                                                     indent=4,
+                                                     separators=(',', ':')) + '\n')
                                 producer.sendjsondata(msg)
                                 write_ckpt(cfg)
                             elif isinstance(binlogevent, UpdateRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["after_values"]]
                                 msg['old'] = [row["before_values"]]
                                 msg['database'] = event['schema']
@@ -479,10 +473,15 @@ def incr_sync(cfg):
                                                             ensure_ascii=False,
                                                             indent=4,
                                                             separators=(',', ':')) + '\n')
-                                producer.sendjsondata(msg, cls=DateEncoder)
+                                    print(json.dumps(msg,
+                                                     cls=DateEncoder,
+                                                     ensure_ascii=False,
+                                                     indent=4,
+                                                     separators=(',', ':')) + '\n')
+                                producer.sendjsondata(msg)
                                 write_ckpt(cfg)
                             elif isinstance(binlogevent, DeleteRowsEvent):
-                                msg = cfg['kafka']['templete']
+                                msg = dict(cfg['kafka']['templete'])
                                 msg['data'] = [row["values"]]
                                 msg['database'] = event['schema']
                                 msg['pkNames'] = get_table_pk_names(cfg, event)
@@ -490,12 +489,17 @@ def incr_sync(cfg):
                                 msg['ts'] = int(time.mktime(datetime.datetime.now().timetuple()))
                                 msg['type'] = 'DELETE'
                                 if cfg['sync_settings']['debug'] == 'Y':
+                                    print(json.dumps(msg,
+                                                            cls=DateEncoder,
+                                                            ensure_ascii=False,
+                                                            indent=4,
+                                                            separators=(',', ':')) + '\n')
                                     logging.info(json.dumps(msg,
                                                             cls=DateEncoder,
                                                             ensure_ascii=False,
                                                             indent=4,
                                                             separators=(',', ':')) + '\n')
-                                producer.sendjsondata(msg, cls=DateEncoder)
+                                producer.sendjsondata(msg)
                                 write_ckpt(cfg)
 
 

@@ -1,19 +1,107 @@
-# 安装驱动
-export PYTHON3_HOME=/home/hopson/apps/usr/webserver/dba/python3.6.8
-export LD_LIBRARY_PATH=$PYTHON3_HOME/lib
-$PYTHON3_HOME/bin/pip3 install elasticsearch==7.14 -i https://pypi.douban.com/simple
-$PYTHON3_HOME/bin/pip3 install mysql-replication==0.24 -i https://pypi.douban.com/simple
+
+**一、概述**
+
+------------
+
+   功能：MySQL向Kafka数据同步工具。基于PYTHON3.6语言开发，支持MySQL5.6,MySQL5.7,TDSQL-MySQL-C 表实时同步至Kafka中，通过解析binlog实现。
+
+   1.1 安装python3.6
+
+     yum -y install python36
+
+   1.2 安装依赖
+
+     pip3 install -r requirements.txt
+   
+
+**二、配置文件**
+
+------------
+ 
+   2.1 sync_mysql2es.json 参数说明
+   
+       "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "isInit"   : true,
+        "logfile"  : "sync_mysql2kafka.log",
+        "batch"    : 5,
+        "debug"    : "Y",
+        "db"       : "21block",
+        "table"    : "xs1,xs2"
+     },
+
+       "MYSQL_SETTINGS" : {
+          "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
+          "port"  : 29333,
+          "user"  : "root",
+          "passwd": "root"
+       },
+    
+       "KAFKA_SETTINGS":  {
+            "host"  : "10.2.39.81",
+            "port"  : "9092",
+            "topic" : "hst_source_tdsql_test4",
+            "templete": {
+                "data":[],
+                "database":"",
+                "isDdl":false,
+                "old":null,
+                "pkNames":[
+                    "_id"
+                ],
+                "sql":"",
+                "table":"",
+                "ts":0,
+                "type":""
+            }
+       }
+
+        
+------------
+
+  2.2 SYNC_SETTINGS参数说明
+
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| isSync | 是否启用同步  |
+| isInit | 是否全量同步  |
+| logfile | 同步日志文件名  |
+| batch   |全量同步批大小   |
+| debug  |打开调试模式 Y,关闭：N  |
+| db       | MySQL 同步库名  |
+| table    | MySQL 同步表名  |
 
 
-pip3 install elasticsearch==7.14.0 -i https://pypi.douban.com/simple
-pip3 install  mysql-replication==0.21  -i https://pypi.douban.com/simple
-pip3 install  PyMySQL==0.9.2  -i https://pypi.douban.com/simple_
-pip3 install -r requirements.txt
+ 2.3 MYSQL_SETTINGS 参数说明：
 
-D:\apps\python3.6\python.exe mysql2es_sync.py --conf=mysql2es_sync.json
-cd /home/hopson/apps/usr/webserver/dba_syncer/sync_mysql2elasticsearch
-python3 mysql2es_sync.py --conf=mysql2es_sync.json
+------------
 
-kafka-topics --zookeeper test-hadoop-6:2181 --list
-kafka-topics --create --zookeeper test-hadoop-6:2181 --replication-factor 2 --partitions 1 --topic hst_source_tdsql_test4
-kafka-console-consumer --bootstrap-server test-hadoop-7:9092,test-hadoop-8:9092,test-hadoop-9:9092 --topic hst_source_tdsql_test4
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| host  | 配置 MySQL 数据库IP    |
+| port  | 配置 MySQL 数据库PORT  |
+| user | 配置 MySQL 用户   |
+| passwd  | 配置 MySQL 密码  |
+
+ 2.4 KAFKA_SETTINGS 参数说明：
+
+------------
+
+|  参数名	 |参数描述   |
+| :------------ | :------------ |
+| host  | 配置 Kafka IP或域名    |
+| port  | 配置 Kafka 端口  |
+| topic | 配置 Kafka topic名称   |
+| templete  | 配置 kafka 消息模板 |
+|
+------------
+
+**三、启动同步**
+
+   linux:
+   
+       nohup python3 python3 sync_mysql2kafka.py --conf=sync_mysql2kafka.json &
+   
+   windows:
+   
+       python.exe sync_mysql2kafka.py -conf=sync_mysql2kafka.json

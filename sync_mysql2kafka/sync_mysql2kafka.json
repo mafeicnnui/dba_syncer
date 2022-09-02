@@ -23,6 +23,7 @@
         "templete": {
             "data":[],
             "database":"",
+            "dataType":"",
             "isDdl":false,
             "old":null,
             "pkNames":[

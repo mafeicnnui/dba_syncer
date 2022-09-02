@@ -18,6 +18,20 @@
     "KAFKA_SETTINGS":  {
         "host"  : "10.2.39.81",
         "port"  : "9092",
-        "topic" : "hst_source_tdsql_test"
+        "topic" : "hst_source_tdsql_test",
+        "templete" : {
+            "data":[],
+            "database":"",
+            "dataType":"",
+            "isDdl":false,
+            "old":null,
+            "pkNames":[
+                "_id"
+            ],
+            "sql":"",
+            "table":"",
+            "ts":0,
+            "type":""
+        }
     }
 }
