@@ -1,0 +1,64 @@
+{
+  "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "level"    : "1",
+        "db"       : "block_cluster",
+        "table"    : "cluster_info:",
+        "logfile"  : "block_cluster_cluster_info.log",
+        "batch"    : 5,
+        "debug"    : "Y"
+   },
+
+   "MYSQL_SETTINGS" : {
+        "host"  : "172.21.0.36",
+        "port"  : 3306,
+        "user"  : "root",
+        "passwd": "Dev21@block2022"
+    },
+
+    "ES_SETTINGS": {
+        "host": "172.21.0.48",
+        "port": "9200",
+        "schema": "http",
+        "user": "elastic",
+        "passwd": "21block@2022",
+        "index": "21block_cluster_info",
+        "mapping": {
+            "mappings":
+             {
+                "properties":
+                {
+                    "business_name":
+                    {
+                        "type": "text",
+                        "analyzer": "ik_max_word"
+                    },
+                    "cluster_desc":
+                    {
+                        "type": "text",
+                        "analyzer": "ik_max_word"
+                    },
+                    "locate_name":
+                    {
+                        "type": "text",
+                        "analyzer": "ik_max_word"
+                    },
+                    "location":
+                    {
+                        "type": "geo_point"
+                    },
+                    "remark":
+                    {
+                        "type": "text",
+                        "analyzer": "standard"
+                    },
+                    "title":
+                    {
+                        "type": "text",
+                        "analyzer": "ik_max_word"
+                    }
+                }
+            }
+        }
+    }
+}

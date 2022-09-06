@@ -1,0 +1,28 @@
+{
+    "SYNC_SETTINGS"  : {
+        "logfile"         : "sync_mysql2kafka.log",
+        "batch_size"      : 100,
+        "incr_batch_size" : 5,
+        "sync_time_type"  : "day",
+        "debug"           : "N",
+        "db"              : "hopson_hft",
+        "table"           : "intel_order:update_time:30,intel_order_detail:create_sys_time:30"
+   },
+
+   "DORIS_SETTINGS" : {
+      "host"   : "10.2.39.144",
+      "port"   : "9030",
+      "user"   : "root",
+      "passwd" : "",
+      "schema" : "hopson_hft",
+      "table"  : "intel_order,intel_order_detail"
+   },
+
+   "TDSQL_SETTINGS" : {
+      "host"  : "bj-cynosdbmysql-grp-8saf3mpc.sql.tencentcdb.com",
+      "port"  : "24233",
+      "user"  : "root",
+      "passwd": "Dev21@block2022",
+      "schema" : "hopson_hft"
+   }
+}

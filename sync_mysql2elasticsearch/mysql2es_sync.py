@@ -201,7 +201,7 @@ def diff_sync(cfg):
                      log_pos  = int(cfg['binlog_pos']))
 
         schema = cfg['sync_settings']['db']
-        table = cfg['sync_settings']['table']
+        table = cfg['sync_settings']['table'].split(':')[0]
         print('apply diff logs for table:{}.{}...'.format(schema,table))
         for binlogevent in stream:
 
@@ -216,24 +216,39 @@ def diff_sync(cfg):
                 for row in binlogevent.rows:
                     event = {"schema": binlogevent.schema,
                              "table": binlogevent.table,
-                             "pk_name":get_tab_pk_name(get_db(cfg),binlogevent.schema,binlogevent.table)}
+                             "pk_name":get_tab_pk_name(get_db(cfg),binlogevent.schema,binlogevent.table),
+                             "id":cfg['sync_settings']['table'].split(':')[1]}
 
                     if event['schema'] == schema and event['table'] == table :
                         if isinstance(binlogevent, WriteRowsEvent):
                             event["action"] = "insert"
                             if cfg['sync_settings']['level'] == '1':
-                               es_doc = {
-                                   "_index": cfg['es_settings']['index'],
-                                   "_id": int(row["values"][event['pk_name']]),
-                                   "_source": row["values"],
-                               }
+                               if event['id'] is not None and event['id']!='':
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": int(row["values"][event['id']]),
+                                        "_source": row["values"]
+                                    }
+                               else:
+                                   es_doc = {
+                                       "_index": cfg['es_settings']['index'],
+                                       "_id": int(row["values"][event['pk_name']]),
+                                       "_source": row["values"],
+                                   }
                             elif cfg['sync_settings']['level'] == '2':
                                event[cfg['sync_settings']['table']] = row["values"]
-                               es_doc = {
-                                   "_index": cfg['es_settings']['index'],
-                                   "_id": int(row["values"][event['pk_name']]),
-                                   "_source": event,
-                               }
+                               if event['id'] is not None and event['id']!='':
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": int(row["values"][event['id']]),
+                                        "_source": row["values"]
+                                    }
+                               else:
+                                   es_doc = {
+                                       "_index": cfg['es_settings']['index'],
+                                       "_id": int(row["values"][event['pk_name']]),
+                                       "_source": event,
+                                   }
                             else:
                                logging.info('Not support level!')
                                sys.exit(0)
@@ -249,20 +264,36 @@ def diff_sync(cfg):
                         elif isinstance(binlogevent, UpdateRowsEvent):
                             event["action"] = "update"
                             if cfg['sync_settings']['level'] == '1':
-                                id = int(row["after_values"][event['pk_name']])
-                                es_doc = {
-                                    "_index": cfg['es_settings']['index'],
-                                    "_id": id,
-                                    "_source": row["after_values"],
-                                }
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["after_values"][event['id']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": row["after_values"],
+                                    }
+                                else:
+                                    id = int(row["after_values"][event['pk_name']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": row["after_values"],
+                                    }
                             elif cfg['sync_settings']['level'] == '2':
                                 event[cfg['sync_settings']['table']] = row["after_values"]
-                                id = int(row["after_values"][event['pk_name']])
-                                es_doc = {
-                                    "_index": cfg['es_settings']['index'],
-                                    "_id": id,
-                                    "_source": event,
-                                }
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["after_values"][event['id']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": int(row["after_values"][event['id']]),
+                                        "_source": event,
+                                    }
+                                else:
+                                    id = int(row["after_values"][event['pk_name']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": event,
+                                    }
                             else:
                                 logging.info('Not support level!')
                                 sys.exit(0)
@@ -281,9 +312,15 @@ def diff_sync(cfg):
                         elif isinstance(binlogevent, DeleteRowsEvent):
                             event["action"] = "delete"
                             if cfg['sync_settings']['level'] == '1':
-                                id = int(row["values"][event['pk_name']])
+                                if event['id'] is not None and event['id']!='':
+                                   id = int(row["values"][event['id']])
+                                else:
+                                   id = int(row["values"][event['pk_name']])
                             elif cfg['sync_settings']['level'] == '2':
-                                id = int(row["values"][event['pk_name']])
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["values"][event['id']])
+                                else:
+                                    id = int(row["values"][event['pk_name']])
                             else:
                                 logging.info('Not support level!')
                                 sys.exit(0)
@@ -320,7 +357,7 @@ def incr_sync(cfg):
                      log_pos  = int(cfg['full_binlog_pos']))
 
         schema = cfg['sync_settings']['db']
-        table = cfg['sync_settings']['table']
+        table = cfg['sync_settings']['table'].split(':')[0]
         sync_time = datetime.datetime.now()
         print('apply incr logs for table:{}.{}...'.format(schema, table))
         for binlogevent in stream:
@@ -346,53 +383,84 @@ def incr_sync(cfg):
                 for row in binlogevent.rows:
                     event = {"schema": binlogevent.schema,
                              "table": binlogevent.table,
-                             "pk_name":get_tab_pk_name(get_db(cfg),binlogevent.schema,binlogevent.table)}
+                             "pk_name": get_tab_pk_name(get_db(cfg), binlogevent.schema, binlogevent.table),
+                             "id": cfg['sync_settings']['table'].split(':')[1]}
 
                     if event['schema'] == schema and event['table'] == table :
                         if isinstance(binlogevent, WriteRowsEvent):
                             event["action"] = "insert"
                             if cfg['sync_settings']['level'] == '1':
-                               es_doc = {
-                                   "_index": cfg['es_settings']['index'],
-                                   "_id": int(row["values"][event['pk_name']]),
-                                   "_source": row["values"],
-                               }
+                                if event['id'] is not None and event['id']!='':
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": int(row["values"][event['id']]),
+                                        "_source": row["values"]
+                                    }
+                                else:
+                                   es_doc = {
+                                       "_index": cfg['es_settings']['index'],
+                                       "_id": int(row["values"][event['pk_name']]),
+                                       "_source": row["values"],
+                                   }
                             elif cfg['sync_settings']['level'] == '2':
-                               event[cfg['sync_settings']['table']] = row["values"]
-                               es_doc = {
-                                   "_index": cfg['es_settings']['index'],
-                                   "_id": int(row["values"][event['pk_name']]),
-                                   "_source": event,
-                               }
+                                event[cfg['sync_settings']['table']] = row["values"]
+                                if event['id'] is not None and event['id']!='':
+                                    es_doc = {
+                                       "_index": cfg['es_settings']['index'],
+                                       "_id": int(row["values"][event['id']]),
+                                       "_source": row["values"]
+                                    }
+                                else:
+                                    es_doc = {
+                                       "_index": cfg['es_settings']['index'],
+                                       "_id": int(row["values"][event['pk_name']]),
+                                       "_source": event,
+                                    }
                             else:
                                logging.info('Not support level!')
                                sys.exit(0)
 
                             if cfg['sync_settings']['debug'] == 'Y':
                                 logging.info('insert:'+json.dumps(es_doc,
-                                                                   cls=DateEncoder,
-                                                                   ensure_ascii=False,
-                                                                   indent=4,
-                                                                   separators=(',', ':')) + '\n')
+                                                                  cls=DateEncoder,
+                                                                  ensure_ascii=False,
+                                                                  indent=4,
+                                                                  separators=(',', ':')) + '\n')
                             helpers.bulk(cfg['es'], [es_doc])
                             write_ckpt(cfg)
                         elif isinstance(binlogevent, UpdateRowsEvent):
                             event["action"] = "update"
                             if cfg['sync_settings']['level'] == '1':
-                                id = int(row["after_values"][event['pk_name']])
-                                es_doc = {
-                                    "_index": cfg['es_settings']['index'],
-                                    "_id": id,
-                                    "_source": row["after_values"],
-                                }
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["after_values"][event['id']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": row["after_values"],
+                                    }
+                                else:
+                                    id = int(row["after_values"][event['pk_name']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": row["after_values"],
+                                    }
                             elif cfg['sync_settings']['level'] == '2':
                                 event[cfg['sync_settings']['table']] = row["after_values"]
-                                id = int(row["after_values"][event['pk_name']])
-                                es_doc = {
-                                    "_index": cfg['es_settings']['index'],
-                                    "_id": id,
-                                    "_source": event,
-                                }
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["after_values"][event['id']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": int(row["after_values"][event['id']]),
+                                        "_source": event,
+                                    }
+                                else:
+                                    id = int(row["after_values"][event['pk_name']])
+                                    es_doc = {
+                                        "_index": cfg['es_settings']['index'],
+                                        "_id": id,
+                                        "_source": event,
+                                    }
                             else:
                                 logging.info('Not support level!')
                                 sys.exit(0)
@@ -416,12 +484,19 @@ def incr_sync(cfg):
                         elif isinstance(binlogevent, DeleteRowsEvent):
                             event["action"] = "delete"
                             if cfg['sync_settings']['level'] == '1':
-                                id = int(row["values"][event['pk_name']])
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["values"][event['id']])
+                                else:
+                                    id = int(row["values"][event['pk_name']])
                             elif cfg['sync_settings']['level'] == '2':
-                                id = int(row["values"][event['pk_name']])
+                                if event['id'] is not None and event['id']!='':
+                                    id = int(row["values"][event['id']])
+                                else:
+                                    id = int(row["values"][event['pk_name']])
                             else:
                                 print('Not support level!')
                                 sys.exit(0)
+
                             event[cfg['sync_settings']['table']] = row["values"]
                             delete_by_id = {
                                 "query": {"match":{"_id":id }}
@@ -446,7 +521,9 @@ def full_sync(cfg):
     cfg['full_binlog_file'], cfg['full_binlog_pos'] = get_file_and_pos(cfg)[0:2]
     logging.info('full sync checkpoint:{}/{}'.format(cfg['full_binlog_file'], cfg['full_binlog_pos']))
     cfg['cr_mysql_dict'].execute('UNLOCK TABLES')
-    event = {'schema': cfg['sync_settings']['db'], 'table': cfg['sync_settings']['table']}
+    event = {'schema': cfg['sync_settings']['db'],
+             'table': cfg['sync_settings']['table'].split(':')[0],
+             'id':cfg['sync_settings']['table'].split(':')[1]}
     logging.info('full sync table:{}.{}...'.format(event['schema'],event['table']))
     print('full sync table:{}.{}...'.format(event['schema'],event['table']))
     if  check_es_doc_exists(cfg) == 0:
@@ -467,11 +544,38 @@ def full_sync(cfg):
             batch = []
             if len(rs) > 0:
                 for i in rs:
-                   doc = {
-                        "_index": cfg['es_settings']['index'],
-                        "_id": int(i[v_pk_col_name]),
-                        "_source": i
-                   }
+                   if cfg['sync_settings']['level'] == '1':
+                       if event['id'] is not None and event['id']!='':
+                           doc = {
+                                "_index": cfg['es_settings']['index'],
+                                 "_id": int(i[event['id']]),
+                                "_source": i
+                           }
+                       else:
+                           doc = {
+                               "_index": cfg['es_settings']['index'],
+                               "_id": int(i[v_pk_col_name]),
+                               "_source": i
+                           }
+                   elif cfg['sync_settings']['level'] == '2':
+                       evt = {}
+                       evt[event['table']] = i
+                       if event['id'] is not None and event['id']!='':
+                           doc = {
+                               "_index": cfg['es_settings']['index'],
+                               "_id": int(i[event['id']]),
+                               "_source": evt
+                           }
+                       else:
+                           doc = {
+                               "_index": cfg['es_settings']['index'],
+                               "_id": int(i[v_pk_col_name]),
+                               "_source": evt
+                           }
+                   else:
+                       logging.info('Not support level!')
+                       sys.exit(0)
+
                    batch.append(doc)
             if len(batch) >0:
                helpers.bulk(cfg['es'], batch)
