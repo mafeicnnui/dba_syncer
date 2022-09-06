@@ -236,12 +236,12 @@ def diff_sync(cfg):
                                        "_source": row["values"],
                                    }
                             elif cfg['sync_settings']['level'] == '2':
-                               event[cfg['sync_settings']['table']] = row["values"]
+                               event[cfg['sync_settings']['table'].split(':')[0]] = row["values"]
                                if event['id'] is not None and event['id']!='':
                                     es_doc = {
                                         "_index": cfg['es_settings']['index'],
                                         "_id": int(row["values"][event['id']]),
-                                        "_source": row["values"]
+                                        "_source": event
                                     }
                                else:
                                    es_doc = {
@@ -279,7 +279,7 @@ def diff_sync(cfg):
                                         "_source": row["after_values"],
                                     }
                             elif cfg['sync_settings']['level'] == '2':
-                                event[cfg['sync_settings']['table']] = row["after_values"]
+                                event[cfg['sync_settings']['table'].split(':')[0]] = row["after_values"]
                                 if event['id'] is not None and event['id']!='':
                                     id = int(row["after_values"][event['id']])
                                     es_doc = {
@@ -403,12 +403,12 @@ def incr_sync(cfg):
                                        "_source": row["values"],
                                    }
                             elif cfg['sync_settings']['level'] == '2':
-                                event[cfg['sync_settings']['table']] = row["values"]
+                                event[cfg['sync_settings']['table'].split(':')[0]] = row["values"]
                                 if event['id'] is not None and event['id']!='':
                                     es_doc = {
                                        "_index": cfg['es_settings']['index'],
                                        "_id": int(row["values"][event['id']]),
-                                       "_source": row["values"]
+                                       "_source": event
                                     }
                                 else:
                                     es_doc = {
@@ -446,7 +446,7 @@ def incr_sync(cfg):
                                         "_source": row["after_values"],
                                     }
                             elif cfg['sync_settings']['level'] == '2':
-                                event[cfg['sync_settings']['table']] = row["after_values"]
+                                event[cfg['sync_settings']['table'].split(':')[0]] = row["after_values"]
                                 if event['id'] is not None and event['id']!='':
                                     id = int(row["after_values"][event['id']])
                                     es_doc = {

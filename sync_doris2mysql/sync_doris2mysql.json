@@ -2,11 +2,9 @@
     "SYNC_SETTINGS"  : {
         "logfile"         : "sync_mysql2kafka.log",
         "batch_size"      : 100,
-        "incr_batch_size" : 5,
+        "incr_batch_size" : 2,
         "sync_time_type"  : "day",
-        "debug"           : "N",
-        "db"              : "hopson_hft",
-        "table"           : "intel_order:update_time:30,intel_order_detail:create_sys_time:30"
+        "debug"           : "N"
    },
 
    "DORIS_SETTINGS" : {
@@ -14,8 +12,8 @@
       "port"   : "9030",
       "user"   : "root",
       "passwd" : "",
-      "schema" : "hopson_hft",
-      "table"  : "intel_order,intel_order_detail"
+      "schema" : "block_app",
+      "table"  : "app_recommend:update_time:700"
    },
 
    "TDSQL_SETTINGS" : {
@@ -23,6 +21,6 @@
       "port"  : "24233",
       "user"  : "root",
       "passwd": "Dev21@block2022",
-      "schema" : "hopson_hft"
+      "schema" : "block_app"
    }
 }

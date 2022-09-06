@@ -107,13 +107,14 @@ def get_sync_table_cols(db,tab):
     cr.execute(v_sql)
     rs_source = cr.fetchall()
     for i in list(rs_source):
-        v_col=v_col+i[0]+','
+        v_col=v_col+'`'+i[0]+'`,'
     cr.close()
     return v_col[0:-1]
 
 def f_get_table_ddl(cfg,tab):
     db = cfg['db_doris']
     cr = db.cursor()
+    pk = get_sync_table_pk_names(cfg['db_doris_dict'],tab)
     st ="""SELECT column_name,
                    CASE WHEN column_type='string' THEN 
                        'varchar(200)' 
@@ -131,7 +132,7 @@ def f_get_table_ddl(cfg,tab):
         v_name = rs[i][0]
         v_type = rs[i][1]
         v_cre_tab = v_cre_tab + '   `' + v_name + '`    ' + v_type + ',\n'
-    return v_cre_tab +' PRIMARY KEY(id))'
+    return v_cre_tab +' PRIMARY KEY({}))'.format(pk)
 
 def get_sync_table_total_rows(db,tab,v_where):
     cr = db.cursor()
@@ -164,18 +165,17 @@ def get_sync_table_pk_names(db,tab):
     v_sql="""desc {}""".format(tab)
     cr.execute(v_sql)
     rs = cr.fetchall()
-    for i in list(rs):
-        if i['key'] == True:
-           v_col=v_col+'`'+i['field']+'`,'
+    for i in rs:
+        if i['Key'] == 'true':
+           v_col=v_col+'`'+i['Field']+'`,'
     cr.close()
     return v_col[0:-1]
 
 def get_sync_table_pk_vals(db,tab):
     v_col=''
     for i in get_sync_table_pk_names(db,tab).split(','):
-        v_col = v_col + "CAST(" + i[0] + " as char)," + "\'^^^\'" + ","
+        v_col = v_col + "CAST(" + i + " as char)," + "\'^^^\'" + ","
     return 'CONCAT('+v_col[0:-7]+')'
-
 
 def get_tab_header(cfg,tab):
     db=cfg['db_doris']
@@ -187,6 +187,13 @@ def get_tab_header(cfg,tab):
     s1=s1+get_sync_table_cols(db,tab)+")"
     cr.close()
     return s1+s2
+
+def get_sync_where(pk_cols,pk_vals):
+    v_where=''
+    for i in range(len(pk_cols.split(','))):
+        v_where=v_where+pk_cols.split(',')[i]+"='"+pk_vals.split('^^^')[i]+"' and "
+    return v_where[0:-4]
+
 
 def ddl_sync(cfg):
     db_doris = cfg['db_doris']
@@ -214,6 +221,7 @@ def ddl_sync(cfg):
     cr_mysql.close()
 
 def full_sync(cfg):
+    print('\n\033[0;36;40mstart full sync...\033[0m')
     for obj in cfg['DORIS_SETTINGS']['table'].split(","):
         tab = obj.split(':')[0]
         if (check_mysql_tab_exists(cfg, tab) == 0
@@ -249,6 +257,8 @@ def full_sync(cfg):
                             ins_val = ins_val + "'" + format_sql(str(rs_source[i][j])) + "',"
                     v_sql = v_sql + '(' + ins_val[0:-1] + '),'
                 batch_sql = ins_sql_header + v_sql[0:-1]
+                if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+                    print(batch_sql)
 
                 # noinspection PyBroadException
                 try:
@@ -264,51 +274,53 @@ def full_sync(cfg):
                              i_counter,
                              round(i_counter / n_tab_total_rows * 100,2)), end='')
                 rs_source = cr_source.fetchmany(n_batch_size)
-            print('')
+        else:
+            print('Table:{0} already exists data ,skip full sync!'.format(tab))
 
 def incr_sync(cfg):
+    print('\n\033[0;36;40mstart incr sync...\033[0m')
     for obj in cfg['DORIS_SETTINGS']['table'].split(","):
         tab = obj.split(':')[0]
         i_counter = 0
         db_doris = cfg['db_doris']
         db_doris_dict = cfg['db_doris_dict']
-        cr_source = db_doris.cursor()
+        cr_doris = db_doris.cursor()
         db_mysql = cfg['db_mysql']
-        cr_desc = db_mysql.cursor()
-
+        cr_mysql = db_mysql.cursor()
         v_pk_names = get_sync_table_pk_names(db_doris_dict, tab)
         v_pk_cols = get_sync_table_pk_vals(db_doris_dict, tab)
-
-        print('v_pk_names=',v_pk_names)
-        print('v_pk_cols=',v_pk_cols)
-
-
         v_where = get_incr_where(obj, cfg)
         ins_sql_header = get_tab_header(cfg, tab)
-        n_batch_size = int(cfg['SYNC_SETTINGS']['batch_size_incr'])
+        n_batch_size = int(cfg['SYNC_SETTINGS']['incr_batch_size'])
         n_tab_total_rows = get_sync_table_total_rows(db_doris, tab, v_where)
-        v_sql = """select * from {} {}""".format(tab,v_where)
-        # print(v_sql)
-        n_rows = 0
-        cr_source.execute(v_sql)
-        rs_source = cr_source.fetchmany(n_batch_size)
-        start_time = datetime.datetime.now()
+        if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+            print('v_pk_names=', v_pk_names)
+            print('v_pk_cols=', v_pk_cols)
+            print('v_where=',v_where)
+            print('ins_sql_header=', ins_sql_header)
+            print('n_batch_size=', n_batch_size)
+            print('n_tab_total_rows=', n_tab_total_rows)
+        v_sql = """select {0} as 'pk',{1} from {2} {3}""".format(v_pk_cols,get_sync_table_cols(db_doris, tab),tab,v_where)
+        if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+           print(v_sql)
+        cr_doris.execute(v_sql)
+        rs_doris = cr_doris.fetchmany(n_batch_size)
 
         if obj.split(':')[1] == '':
-            print('DB:{0},delete {1} table data please wait...'.format(cfg['db_mysql_string'], tab))
-            cr_desc.execute('delete from {0}'.format(tab))
-            print('DB:{0},delete {1} table data ok!'.format(cfg['db_mysql_string'], tab))
+            if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+               print('DB:{0},delete {1} table data please wait...'.format(cfg['db_mysql_string'], tab))
+            cr_mysql.execute('delete from {0}'.format(tab))
+            if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+               print('DB:{0},delete {1} table data ok!'.format(cfg['db_mysql_string'], tab))
 
-        while rs_source:
-            batch_sql = ""
-            batch_sql_del = ""
+        while rs_doris:
             v_sql = ''
             v_sql_del = ''
-            for r in list(rs_source):
-                rs_source_desc = cr_source.description
+            for r in list(rs_doris):
+                rs_doris_desc = cr_doris.description
                 ins_val = ""
                 for j in range(1, len(r)):
-                    col_type = str(rs_source_desc[j][1])
+                    col_type = str(rs_doris_desc[j][1])
                     if r[j] is None:
                         ins_val = ins_val + "null,"
                     elif col_type in('252','253') :  # varchar,date
@@ -322,18 +334,19 @@ def incr_sync(cfg):
                 v_sql = v_sql + '(' + ins_val[0:-1] + '),'
                 v_sql_del = v_sql_del + get_sync_where(v_pk_names, r[0]) + ","
             batch_sql = ins_sql_header + v_sql[0:-1]
-
             # noinspection PyBroadException
             try:
-                if ftab.split(':')[1] == '':
-                    cr_desc.execute(batch_sql)
+                if obj.split(':')[1] == '':
+                    cr_mysql.execute(batch_sql)
                 else:
                     for d in v_sql_del[0:-1].split(','):
-                        # print('delete from {0} where {1}'.format(tab, d))
-                        cr_desc.execute('delete from {0} where {1}'.format(tab, d))
-                    # print(batch_sql)
-                    cr_desc.execute(batch_sql)
-                i_counter = i_counter + len(rs_source)
+                        if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+                           print('delete from {0} where {1}'.format(tab, d))
+                        cr_mysql.execute('delete from {0} where {1}'.format(tab, d))
+                    if cfg['SYNC_SETTINGS']['debug'] == 'Y':
+                        print(batch_sql)
+                    cr_mysql.execute(batch_sql)
+                i_counter = i_counter + len(rs_doris)
             except:
                 print(traceback.format_exc())
                 sys.exit(0)
@@ -341,15 +354,11 @@ def incr_sync(cfg):
             print("\rTable:{0},Total rec:{1},Process rec:{2},Complete:{3}%"
                   .format(tab, n_tab_total_rows, i_counter, round(i_counter / n_tab_total_rows * 100, 2)), end='')
 
-            rs_source = cr_source.fetchmany(n_batch_size)
-        print('')
-        db_desc.commit()
+            rs_doris = cr_doris.fetchmany(n_batch_size)
+            print('')
+        db_mysql.commit()
 
 
-'''
-   1.table must have `id` column.
-   
-'''
 def main():
    # read config
    args = parse_param()
@@ -376,7 +385,7 @@ def main():
    full_sync(config)
 
    # incr sync
-   #incr_sync(config)
+   incr_sync(config)
 
 
 if __name__ == "__main__":
