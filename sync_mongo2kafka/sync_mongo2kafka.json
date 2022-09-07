@@ -11,8 +11,8 @@
         "host"     : "192.168.1.1",
         "port"     : "48011",
         "db"       : "admin",
-        "user"     : "mongouser",
-        "passwd"   : "Dev21@block2022",
+        "user"     : "admin",
+        "passwd"   : "xxxxx",
         "db_name"  : "test",
         "tab_name" : "xs3"
     },
