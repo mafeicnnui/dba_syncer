@@ -69,7 +69,7 @@
         "KAFKA_SETTINGS":  {
             "host"  : "10.2.39.81,10.2.39.82,10.2.39.83",
             "port"  : "9092,9092,9092",
-            "topic" : "hst_source_tdsql_test"
+            "topic" : "test"
         }
     }
     
