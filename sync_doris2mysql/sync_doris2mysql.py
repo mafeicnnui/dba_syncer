@@ -5,10 +5,8 @@
 # @File : sync_doris2mysql.py.py
 # @Software: PyCharm
 
-import os
 import sys
 import json
-import time
 import datetime
 import logging
 import pymysql
@@ -194,7 +192,6 @@ def get_sync_where(pk_cols,pk_vals):
         v_where=v_where+pk_cols.split(',')[i]+"='"+pk_vals.split('^^^')[i]+"' and "
     return v_where[0:-4]
 
-
 def ddl_sync(cfg):
     db_doris = cfg['db_doris']
     cr_doris = db_doris.cursor()
@@ -357,7 +354,6 @@ def incr_sync(cfg):
             rs_doris = cr_doris.fetchmany(n_batch_size)
             print('')
         db_mysql.commit()
-
 
 def main():
    # read config

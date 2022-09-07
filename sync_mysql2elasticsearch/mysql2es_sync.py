@@ -511,6 +511,7 @@ def incr_sync(cfg):
 
 
     except Exception as e:
+        logging.info(traceback.format_exc())
         traceback.print_exc()
 
 def full_sync(cfg):

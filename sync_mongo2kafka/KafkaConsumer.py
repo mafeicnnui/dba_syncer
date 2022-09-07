@@ -43,7 +43,7 @@ class Kafka_consumer():
 KAFKA_SETTINGS = {
     "host"  : '10.2.39.81', #39.106.184.57
     "port"  :  9092,
-    "topic" : 'hst_source_tdsql_test'
+    "topic" : 'hst_source_tdsql_test4'
 }
 '''
     功能：将datatime类型序列化json可识别类型

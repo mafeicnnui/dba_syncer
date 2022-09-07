@@ -161,6 +161,12 @@ def preprocessor(result):
             result['o'][key] = result['o'][key] + datetime.timedelta(hours=8)
     return result
 
+def preprocessor2(doc):
+    for key in doc:
+        if is_valid_datetime(doc[key]):
+            doc[key] = doc[key] + datetime.timedelta(hours=8)
+    return doc
+
 '''
     功能：判断对象是否为datetime类型  
 '''
@@ -177,11 +183,9 @@ def write_log(doc):
     doc['ts'] = str(doc['ts'])
     if doc['op'] =='i' or doc['op'] =='d' :
        doc['o']['_id'] = str(doc['o']['_id'])
-
     if doc['op']=='u':
        doc['o']['_id'] = str(doc['o']['_id'])
        doc['o2']['_id'] = str(doc['o2']['_id'])
-
     doc=preprocessor(doc)
     logging.info(json.dumps(doc, cls=DateEncoder,ensure_ascii=False, indent=4, separators=(',', ':'))+'\n')
 
@@ -287,7 +291,7 @@ def full_sync(config):
           batch = []
           for e in rs:
              e['_id'] = str(e['_id'])
-             batch.append(e)
+             batch.append(preprocessor2(e))
              if counter % config['sync_settings']['batch'] == 0:
                 msg = dict(config['kafka']['templete'])
                 msg['data'] = batch
@@ -344,11 +348,10 @@ def incr_sync(config):
             db = doc['ns'].split('.')[0]
             if config['mongo']['db_name'] == db and  config['mongo']['tab_name'] is not None:
                 if doc['ns'] in config['sync_table']:
-                    write_log(doc)
                     if doc['op'] == 'i':
                         msg = dict(config['kafka']['templete'])
                         doc['o']['_id'] = str(doc['o']['_id'] )
-                        msg['data'] = [doc['o']]
+                        msg['data'] = [ preprocessor2(doc['o']) ]
                         msg['database'] = doc['ns'].split('.')[0]
                         msg['table'] = doc['ns'].split('.')[1]
                         msg['ts'] = int( round(time.time() * 1000))
@@ -367,7 +370,7 @@ def incr_sync(config):
                     if doc['op'] == 'd':
                         msg = dict(config['kafka']['templete'])
                         doc['o']['_id'] = str(doc['o']['_id'])
-                        msg['data'] = [doc['o']]
+                        msg['data'] = [ preprocessor2(doc['o']) ]
                         msg['database'] = doc['ns'].split('.')[0]
                         msg['table'] = doc['ns'].split('.')[1]
                         msg['ts'] = int( round(time.time() * 1000))
@@ -385,7 +388,7 @@ def incr_sync(config):
 
                     if doc['op'] == 'u':
                         msg = dict(config['kafka']['templete'])
-                        msg['data'] = [doc['o']['$set']] if doc['o'].get('$set', None) is not None else [doc['o']]
+                        msg['data'] = [ preprocessor2(doc['o']['$set'])] if doc['o'].get('$set', None) is not None else [preprocessor2(doc['o']) ]
                         if msg['data'][0].get('_id'):
                            msg['data'][0]['_id'] = str(msg['data'][0]['_id'])
                         msg['database'] = doc['ns'].split('.')[0]
@@ -406,11 +409,10 @@ def incr_sync(config):
 
             if (config['mongo']['db_name']  is  None or config['mongo']['db_name'] =='') \
                     and (config['mongo']['tab_name'] is None or  config['mongo']['tab_name'] =='') :
-                write_log(doc)
                 if doc['op'] == 'i':
                     msg = dict(config['kafka']['templete'])
                     doc['o']['_id'] = str(doc['o']['_id'])
-                    msg['data'] = doc['o']
+                    msg['data'] =[ preprocessor2(doc['o']) ]
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
                     msg['ts'] = int( round(time.time() * 1000))
@@ -425,10 +427,9 @@ def incr_sync(config):
                         print('doc=',doc)
                         logging.info(out)
 
-
                 if doc['op'] == 'd':
                     msg = dict(config['kafka']['templete'])
-                    msg['data'] = doc['o']
+                    msg['data'] = [ preprocessor2(doc['o']) ]
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
                     msg['ts'] = int( round(time.time() * 1000))
@@ -445,7 +446,7 @@ def incr_sync(config):
 
                 if doc['op'] == 'u':
                     msg = dict(config['kafka']['templete'])
-                    msg['data'] = doc['o']['$set'] if doc['o'].get('$set', None) is not None else doc['o']
+                    msg['data'] = [ preprocessor2(doc['o']['$set'])] if doc['o'].get('$set', None) is not None else [preprocessor2(doc['o']) ]
                     msg['old'] = doc['o2']
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
