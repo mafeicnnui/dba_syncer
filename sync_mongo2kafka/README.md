@@ -125,5 +125,5 @@
    
    windows:
    
-       d:\apps\python3.6\python.exe sync_mongo2kafka.py -conf=sync_mongo2kafka.json
-       d:\apps\python3.6\python.exe KafkaConsumer.py
+       python.exe sync_mongo2kafka.py -conf=sync_mongo2kafka.json
+       python.exe KafkaConsumer.py
