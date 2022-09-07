@@ -409,48 +409,55 @@ def incr_sync(config):
 
             if (config['mongo']['db_name']  is  None or config['mongo']['db_name'] =='') \
                     and (config['mongo']['tab_name'] is None or  config['mongo']['tab_name'] =='') :
+
                 if doc['op'] == 'i':
                     msg = dict(config['kafka']['templete'])
                     doc['o']['_id'] = str(doc['o']['_id'])
-                    msg['data'] =[ preprocessor2(doc['o']) ]
+                    msg['data'] = [preprocessor2(doc['o'])]
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
-                    msg['ts'] = int( round(time.time() * 1000))
+                    msg['ts'] = int(round(time.time() * 1000))
+                    msg['type'] = 'INSERT'
                     config['producer'].sendjsondata(msg)
                     write_ckpt(config)
                     out = json.dumps(msg,
-                                        cls=DateEncoder,
-                                        ensure_ascii=False,
-                                        indent=4,
-                                        separators=(',', ':')) + '\n'
+                                     cls=DateEncoder,
+                                     ensure_ascii=False,
+                                     indent=4,
+                                     separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
-                        print('doc=',doc)
+                        print('doc=', doc)
                         logging.info(out)
 
                 if doc['op'] == 'd':
                     msg = dict(config['kafka']['templete'])
-                    msg['data'] = [ preprocessor2(doc['o']) ]
+                    doc['o']['_id'] = str(doc['o']['_id'])
+                    msg['data'] = [preprocessor2(doc['o'])]
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
-                    msg['ts'] = int( round(time.time() * 1000))
+                    msg['ts'] = int(round(time.time() * 1000))
+                    msg['type'] = 'DELETE'
                     config['producer'].sendjsondata(msg)
                     write_ckpt(config)
                     out = json.dumps(msg,
-                                        cls=DateEncoder,
-                                        ensure_ascii=False,
-                                        indent=4,
-                                        separators=(',', ':')) + '\n'
+                                     cls=DateEncoder,
+                                     ensure_ascii=False,
+                                     indent=4,
+                                     separators=(',', ':')) + '\n'
                     if config['sync_settings']['debug'] == 'Y':
-                        print('doc=',doc)
+                        print('doc=', doc)
                         logging.info(out)
 
                 if doc['op'] == 'u':
                     msg = dict(config['kafka']['templete'])
-                    msg['data'] = [ preprocessor2(doc['o']['$set'])] if doc['o'].get('$set', None) is not None else [preprocessor2(doc['o']) ]
-                    msg['old'] = doc['o2']
+                    msg['data'] = [preprocessor2(doc['o']['$set'])] if doc['o'].get('$set', None) is not None else [
+                        preprocessor2(doc['o'])]
+                    if doc['o2'].get('_id'):
+                        msg['data'][0]['_id'] = str(doc['o2'].get('_id'))
                     msg['database'] = doc['ns'].split('.')[0]
                     msg['table'] = doc['ns'].split('.')[1]
-                    msg['ts'] = int( round(time.time() * 1000))
+                    msg['ts'] = int(round(time.time() * 1000))
+                    msg['type'] = 'UPDATE'
                     config['producer'].sendjsondata(msg)
                     write_ckpt(config)
                     out = json.dumps(msg,
