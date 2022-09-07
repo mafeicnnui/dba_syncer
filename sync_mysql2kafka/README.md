@@ -26,13 +26,13 @@
         "logfile"  : "sync_mysql2kafka.log",
         "batch"    : 5,
         "debug"    : "Y",
-        "db"       : "21block",
+        "db"       : "test",
         "table"    : "xs1,xs2"
      },
 
        "MYSQL_SETTINGS" : {
-          "host"  : "bj-cynosdbmysql-grp-3k142zlc.sql.tencentcdb.com",
-          "port"  : 29333,
+          "host"  : "192.168.1.1",
+          "port"  : 3306,
           "user"  : "root",
           "passwd": "root"
        },
@@ -40,7 +40,7 @@
        "KAFKA_SETTINGS":  {
             "host"  : "10.2.39.81",
             "port"  : "9092",
-            "topic" : "hst_source_tdsql_test4",
+            "topic" : "test",
             "templete": {
                 "data":[],
                 "database":"",
