@@ -8,7 +8,7 @@
         "sync_gap" : 3
    },
    "MONGO_SETTINGS" : {
-        "host"     : "82.157.45.224",
+        "host"     : "192.168.1.1",
         "port"     : "48011",
         "db"       : "admin",
         "user"     : "mongouser",
@@ -19,7 +19,7 @@
     "KAFKA_SETTINGS":  {
         "host"  : "10.2.39.81",
         "port"  : "9092",
-        "topic" : "hst_source_tdsql_test4",
+        "topic" : "test",
         "templete" : {
             "data":[],
             "database":"",
