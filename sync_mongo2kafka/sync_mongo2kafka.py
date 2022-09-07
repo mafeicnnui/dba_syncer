@@ -302,7 +302,7 @@ def full_sync(config):
                 msg['type'] = 'INSERT'
                 config['producer'].sendjsondata(msg)
                 if config['sync_settings']['sync_gap']>0:
-                   logging.info('full sync sleep {}s',format(config['sync_settings']['sync_gap']))
+                   logging.info('full sync sleep {}s'.format(config['sync_settings']['sync_gap']))
                    time.sleep(config['sync_settings']['sync_gap'])
 
                 out = json.dumps(msg,
@@ -389,8 +389,8 @@ def incr_sync(config):
                     if doc['op'] == 'u':
                         msg = dict(config['kafka']['templete'])
                         msg['data'] = [ preprocessor2(doc['o']['$set'])] if doc['o'].get('$set', None) is not None else [preprocessor2(doc['o']) ]
-                        if msg['data'][0].get('_id'):
-                           msg['data'][0]['_id'] = str(msg['data'][0]['_id'])
+                        if doc['o2'].get('_id'):
+                           msg['data'][0]['_id'] = str(doc['o2'].get('_id'))
                         msg['database'] = doc['ns'].split('.')[0]
                         msg['table'] = doc['ns'].split('.')[1]
                         msg['ts'] = int( round(time.time() * 1000))
