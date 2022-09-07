@@ -34,11 +34,11 @@
          }
    
        "MONGO_SETTINGS" : {
-            "host"     : "140.143.229.98",
+            "host"     : "192.168.1.1",
             "port"     : "48011",
             "db"       : "admin",
-            "user"     : "mongouser",
-            "passwd"   : "Dev21@block2022",
+            "user"     : "admin",
+            "passwd"   : "admin",
             "db_name"  : "test",
             "tab_name" : "xs1,xs2"
         },
@@ -46,7 +46,7 @@
         "KAFKA_SETTINGS":  {
                 "host"  : "10.2.39.81",
                 "port"  : "9092",
-                "topic" : "hst_source_tdsql_test",
+                "topic" : "test",
                 "templete" : {
                     "data":[],
                     "database":"",
