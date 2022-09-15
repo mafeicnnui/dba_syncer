@@ -1,3 +1,4 @@
 elasticsearch==7.14.0
 mysql-replication==0.21
 PyMySQL==0.9.3
+psutil==5.9.2

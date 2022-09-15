@@ -134,7 +134,7 @@ class Kafka_producer():
 
     def sendjsondata(self, params):
         try:
-            parmas_message = json.dumps(params, cls=DateEncoder)
+            parmas_message = json.dumps(params, cls=DateEncoder,ensure_ascii=False)
             producer = self.producer
             producer.send(self.kafkatopic, parmas_message.encode('utf-8'))
             producer.flush()

@@ -15,6 +15,7 @@ import traceback
 import argparse
 import decimal
 import logging
+import psutil
 from elasticsearch import Elasticsearch
 from elasticsearch import helpers
 from pymysqlreplication import BinLogStreamReader
@@ -308,7 +309,7 @@ def diff_sync(cfg):
                                                                       indent=4,
                                                                       separators=(',', ':')) + '\n')
                             except:
-                               print('Doc not found,update failure!')
+                               logging.info('Doc not found,update failure!')
                         elif isinstance(binlogevent, DeleteRowsEvent):
                             event["action"] = "delete"
                             if cfg['sync_settings']['level'] == '1':
@@ -470,6 +471,9 @@ def incr_sync(cfg):
                                   cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":row["after_values"]})
                                if cfg['sync_settings']['level'] == '2':
                                   cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":event})
+
+                               cfg['es'].indices.refresh(index=cfg['es_settings']['index'])
+                               print('Time:{},{} index refresh!'.format(get_time(),cfg['es_settings']['index']))
                                write_ckpt(cfg)
                                if cfg['sync_settings']['debug'] == 'Y':
                                   logging.info('update:'+json.dumps(es_doc,
@@ -508,7 +512,6 @@ def incr_sync(cfg):
                                    logging.info('delete table:{},id:{}'.format(event['table'], delete_by_id))
                             except:
                                logging.info(traceback.format_exc())
-
 
     except Exception as e:
         logging.info(traceback.format_exc())
@@ -686,7 +689,26 @@ def create_index(cfg):
         cfg['es'].indices.create(index=cfg['es_settings']['index'].lower(), body=cfg['es_settings']['mapping'])
         print('ElasticSearch index {} created!'.format(cfg['es_settings']['index'].lower()))
     except:
+        #traceback.print_exc()
         print('{} index already exist,skip!'.format(cfg['es_settings']['index'].lower()))
+
+def get_task_status(cfg):
+    if check_ckpt(cfg):
+        pid = read_ckpt(cfg).get('pid')
+        if pid :
+            if pid == os.getpid():
+               return False
+
+            if pid in psutil.pids():
+              return True
+            else:
+              return False
+        else:
+            return False
+    else:
+        logging.info('ckpt file :{} not exists!'.format(cfg['ckpt_file']))
+        return False
+
 
 def main():
     # read config
@@ -703,27 +725,31 @@ def main():
         format='[%(asctime)s-%(levelname)s:%(message)s]',
         level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S')
 
-    # init config
-    config = get_config(cfg)
+    # check task
+    if not get_task_status(cfg):
+        # init config
+        config = get_config(cfg)
 
-    # print config
-    print_cfg(config)
+        # print config
+        print_cfg(config)
 
-    # refresh pid
-    config['pid'] = os.getpid()
-    upd_ckpt(cfg)
+        # refresh pid
+        config['pid'] = os.getpid()
+        upd_ckpt(cfg)
 
-    # create index
-    create_index(config)
+        # create index
+        create_index(config)
 
-    # full sync
-    full_sync(config)
+        # full sync
+        full_sync(config)
 
-    # diff sync
-    diff_sync(config)
+        # diff sync
+        diff_sync(config)
 
-    # incr sync
-    incr_sync(config)
+        # incr sync
+        incr_sync(config)
+    else:
+        logging.info('sync program:{} is running!'.format(cfg['cfg_file']))
 
 
 if __name__ == "__main__":
