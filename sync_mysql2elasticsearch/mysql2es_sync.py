@@ -689,7 +689,7 @@ def create_index(cfg):
         cfg['es'].indices.create(index=cfg['es_settings']['index'].lower(), body=cfg['es_settings']['mapping'])
         print('ElasticSearch index {} created!'.format(cfg['es_settings']['index'].lower()))
     except:
-        #traceback.print_exc()
+        traceback.print_exc()
         print('{} index already exist,skip!'.format(cfg['es_settings']['index'].lower()))
 
 def get_task_status(cfg):

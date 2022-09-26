@@ -1,0 +1,40 @@
+{
+  "SYNC_SETTINGS"  : {
+        "isSync"   : true,
+        "level"    : "1",
+        "db"       : "block_content",
+        "table"    : "content_topic:",
+        "logfile"  : "test_block_content_content_topic.log",
+        "batch"    : 5,
+        "debug"    : "Y"
+   },
+
+   "MYSQL_SETTINGS" : {
+        "host"  : "172.21.0.8",
+        "port"  : 3306,
+        "user"  : "root",
+        "passwd": "Test21@block2022"
+    },
+
+    "ES_SETTINGS": {
+        "host": "172.21.0.48",
+        "port": "9200",
+        "schema": "http",
+        "user": "elastic",
+        "passwd": "21block@2022",
+        "index": "21block_test_content_topic",
+        "mapping": {
+            "mappings":
+                {
+                    "properties":
+                    {
+                        "name":
+                        {
+                            "type": "text",
+                            "analyzer": "ik_max_word"
+                        }
+                    }
+                }
+        }
+    }
+}
