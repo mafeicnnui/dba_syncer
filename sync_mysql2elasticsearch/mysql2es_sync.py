@@ -203,7 +203,7 @@ def diff_sync(cfg):
 
         schema = cfg['sync_settings']['db']
         table = cfg['sync_settings']['table'].split(':')[0]
-        print('apply diff logs for table:{}.{}...'.format(schema,table))
+        logging.info('apply diff logs for table:{}.{}...'.format(schema,table))
         for binlogevent in stream:
 
             if binlogevent.event_type in (2,):
@@ -257,7 +257,7 @@ def diff_sync(cfg):
                             helpers.bulk(cfg['es'], [es_doc])
                             write_ckpt(cfg)
                             if cfg['sync_settings']['debug'] == 'Y':
-                                logging.info('insert:'+json.dumps(es_doc,
+                                logging.info('diff insert:'+json.dumps(es_doc,
                                                                    cls=DateEncoder,
                                                                    ensure_ascii=False,
                                                                    indent=4,
@@ -300,16 +300,25 @@ def diff_sync(cfg):
                                 sys.exit(0)
 
                             try:
-                               cfg['es'].update(index=cfg['es_settings']['index'],doc_type='_doc' ,id=id, body={"doc":event})
-                               write_ckpt(cfg)
-                               if cfg['sync_settings']['debug'] == 'Y':
-                                   logging.info('update:'+json.dumps(es_doc,
-                                                                      cls=DateEncoder,
-                                                                      ensure_ascii=False,
-                                                                      indent=4,
-                                                                      separators=(',', ':')) + '\n')
+                                if cfg['sync_settings']['level'] == '1':
+                                    cfg['es'].update(index=cfg['es_settings']['index'], doc_type='_doc', id=id,
+                                                     body={"doc": row["after_values"]})
+                                if cfg['sync_settings']['level'] == '2':
+                                    cfg['es'].update(index=cfg['es_settings']['index'], doc_type='_doc', id=id,
+                                                     body={"doc": event})
+
+                                cfg['es'].indices.refresh(index=cfg['es_settings']['index'])
+                                print('Time:{},{} index refresh!'.format(get_time(), cfg['es_settings']['index']))
+                                write_ckpt(cfg)
+                                if cfg['sync_settings']['debug'] == 'Y':
+                                    logging.info('update:' + json.dumps(es_doc,
+                                                                        cls=DateEncoder,
+                                                                        ensure_ascii=False,
+                                                                        indent=4,
+                                                                        separators=(',', ':')) + '\n')
+
                             except:
-                               logging.info('Doc not found,update failure!')
+                                logging.info(traceback.format_exc())
                         elif isinstance(binlogevent, DeleteRowsEvent):
                             event["action"] = "delete"
                             if cfg['sync_settings']['level'] == '1':
@@ -334,7 +343,7 @@ def diff_sync(cfg):
                                cfg['es'].delete_by_query(index=cfg['es_settings']['index'],body=delete_by_id,doc_type='_doc')
                                write_ckpt(cfg)
                                if cfg['sync_settings']['debug'] == 'Y':
-                                   logging.info('delete table:{},id:{}'.format(event['table'], delete_by_id))
+                                   logging.info('diff delete table:{},id:{}'.format(event['table'], delete_by_id))
                             except:
                                logging.info('Doc not found,delete failure!')
 
